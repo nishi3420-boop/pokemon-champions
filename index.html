@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Champions Deck | Pokémon Champions Strategy Suite</title>
+    <meta name="description" content="Pokémon Championsのための高度なダメージ計算とパーティ構築支援ツール。">
+    <!-- PWA & Mobile -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0d0f14">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="assets/logo.png">
+    <link rel="icon" type="image/png" href="assets/logo.png">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <header>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1rem;">
+            <img src="assets/logo.png" alt="Logo" style="width: 60px; height: 60px; filter: drop-shadow(0 0 10px var(--neon-blue));">
+            <div>
+                <h1>Champions Deck</h1>
+                <p>STRATEGY & ANALYSIS SUITE</p>
+            </div>
+        </div>
+    </header>
+
+
+    <main>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="calc">ダメージ計算機</button>
+            <button class="tab-btn" data-tab="builder">チームビルダー</button>
+            <button class="tab-btn" data-tab="database">データベース</button>
+            <button class="tab-btn" id="speed-tab-btn" data-tab="speed">素早さ比較</button>
+        </div>
+
+        <!-- Damage Calculator Panel -->
+        <div id="calc" class="panel active">
+            <div class="card" style="margin-bottom: 1.5rem; padding: 1rem 1.5rem;">
+                <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.8rem;">
+                        <strong style="white-space: nowrap;"><span class="icon">🌤️</span> 天候 (Weather)</strong>
+                        <select id="field-weather" style="padding: 6px 12px; font-size: 0.9rem; max-width: 300px; background: rgba(0,0,0,0.3);">
+                            <option value="none">なし (None)</option>
+                            <option value="sun">にほんばれ (炎 x1.5 / 水 x0.5)</option>
+                            <option value="rain">あまごい (水 x1.5 / 炎 x0.5)</option>
+                            <option value="sand">すなあらし (岩特防 x1.5 / 毎ターンダメージ)</option>
+                            <option value="snow">ゆき / あられ (氷防御 x1.5 / 毎ターンダメージ)</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center; gap: 0.8rem; border-left: 2px solid var(--glass-border); padding-left: 1.5rem;">
+                        <strong style="white-space: nowrap;"><span class="icon">✨</span> 地形 (Terrain)</strong>
+                        <select id="field-terrain" style="padding: 6px 12px; font-size: 0.9rem; max-width: 300px; background: rgba(0,0,0,0.3);">
+                            <option value="none">なし (None)</option>
+                            <option value="psychic">サイコフィールド (超 x1.3)</option>
+                            <option value="electric">エレキフィールド (電 x1.3)</option>
+                            <option value="grassy">グラスフィールド (草 x1.3 / 地震等半減 / 回復)</option>
+                            <option value="misty">ミストフィールド (受ける竜ダメ x0.5)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="calc-grid">
+                <!-- Attacker -->
+                <div class="card">
+                    <h2 style="display: flex; align-items: center; justify-content: space-between;">
+                        <span><span class="icon">⚔️</span> 攻撃側 (Attacker)</span>
+                        <div id="attacker-types-container" style="display: flex; gap: 0.4rem; font-size: 0.8rem; font-weight: normal;"></div>
+                    </h2>
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.2rem;">
+                        <img id="attacker-img" src="" style="width: 56px; height: 56px; object-fit: contain; display: none; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+                        <div class="input-group" style="flex-grow: 1; margin-bottom: 0;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:4px;">
+                                <label style="margin:0;">ポケモン選択</label>
+                                <button id="atk-mega-btn" style="display:none; padding:2px 8px; font-size:0.75rem; background:linear-gradient(145deg, #bbaa66, #998844); border:1px solid #eedd99; border-radius:4px; color:white; cursor:pointer; font-weight:bold; box-shadow:0 0 8px rgba(187,170,102,0.3);" title="メガシンカ形態と切り替えます">ﾒｶﾞｼﾝｶ ✨</button>
+                            </div>
+                            <div style="position: relative;">
+                                <input type="search" id="attacker-input" autocomplete="off" placeholder="名前で検索..." style="width: 100%; box-sizing: border-box;">
+                                <div id="attacker-suggestions" class="autocomplete-suggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1e2433; border: 1px solid var(--glass-border); border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>使用する技</label>
+                        <select id="move-select"></select>
+                        <div id="move-details-container" style="display: flex; gap: 0.5rem; margin-top: 0.6rem; min-height: 24px;">
+                            <!-- Move Badges will be injected here -->
+                        </div>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="input-group">
+                            <label>能力ポイント (0-32)</label>
+                            <input type="number" id="atk-ap" value="32" min="0" max="32">
+                        </div>
+                        <div class="input-group">
+                            <label>攻撃性格</label>
+                            <select id="atk-nature">
+                                <option value="1.0" selected>無補正 (上昇等なし)</option>
+                                <option value="いじっぱり">いじっぱり (攻撃↑ / 特攻↓)</option>
+                                <option value="さみしがり">さみしがり (攻撃↑ / 防御↓)</option>
+                                <option value="ゆうかん">ゆうかん (攻撃↑ / 素早↓)</option>
+                                <option value="やんちゃ">やんちゃ (攻撃↑ / 特防↓)</option>
+                                <option value="ずぶとい">ずぶとい (防御↑ / 攻撃↓)</option>
+                                <option value="わんぱく">わんぱく (防御↑ / 特攻↓)</option>
+                                <option value="のんき">のんき (防御↑ / 素早↓)</option>
+                                <option value="おだやか">おだやか (特防↑ / 攻撃↓)</option>
+                                <option value="しんちょう">しんちょう (特防↑ / 特攻↓)</option>
+                                <option value="なまいき">なまいき (特防↑ / 素早↓)</option>
+                                <option value="ひかえめ">ひかえめ (特攻↑ / 攻撃↓)</option>
+                                <option value="れいせい">れいせい (特攻↑ / 素早↓)</option>
+                                <option value="うっかりや">うっかりや (特攻↑ / 特防↓)</option>
+                                <option value="おくびょう">おくびょう (素早↑ / 攻撃↓)</option>
+                                <option value="せっかち">せっかち (素早↑ / 防御↓)</option>
+                                <option value="ようき">ようき (素早↑ / 特攻↓)</option>
+                                <option value="むじゃき">むじゃき (素早↑ / 特防↓)</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>ランク</label>
+                            <select id="atk-rank">
+                                <option value="0">±0</option>
+                                <option value="1">+1</option>
+                                <option value="2">+2</option>
+                                <option value="3">+3</option>
+                                <option value="4">+4</option>
+                                <option value="5">+5</option>
+                                <option value="6">+6</option>
+                                <option value="-1">-1</option>
+                                <option value="-2">-2</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="input-group" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                        <label>特性 (Attacker Ability)</label>
+                        <select id="atk-ability" style="padding: 6px; font-size: 0.9rem;">
+                            <!-- Populated dynamically -->
+                            <option value="なし">（特性なし）</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                        <label>持ち物 (Attacker Item) <span style="font-size:0.7rem; color:var(--glass-border);">(自由入力可)</span></label>
+                        <select id="atk-item" style="padding: 6px; font-size: 0.9rem;">
+                            <option value="なし">なし</option>
+                            <option value="メガナイト">メガナイト</option>
+                            <option value="こだわりハチマキ">こだわりハチマキ (物理火力1.5倍)</option>
+                            <option value="こだわりメガネ">こだわりメガネ (特殊火力1.5倍)</option>
+                            <option value="こだわりスカーフ">こだわりスカーフ</option>
+                            <option value="いのちのたま">いのちのたま (全火力1.3倍)</option>
+                            <option value="タイプ強化アイテム">タイプ強化アイテム/達人の帯 (1.2倍)</option>
+                            <option value="とつげきチョッキ">とつげきチョッキ</option>
+                            <option value="しんかのきせき">しんかのきせき</option>
+                            <option value="半減実">半減実</option>
+                            <option value="きあいのタスキ">きあいのタスキ</option>
+                            <option value="たべのこし">たべのこし</option>
+                            <option value="かいがらのすず">かいがらのすず</option>
+                            <option value="ひかりのこな">ひかりのこな</option>
+                            <option value="せんせいのツメ">せんせいのツメ</option>
+                            <option value="ピントレンズ">ピントレンズ</option>
+                            <option value="おうじゃのしるし">おうじゃのしるし</option>
+                            <option value="オボンのみ">オボンのみ</option>
+                            <option value="ラムのみ">ラムのみ</option>
+                        </select>
+                    </div>
+                    <div id="attacker-real-stats" style="font-size: 0.8rem; color: var(--accent-primary); margin-top: 0.5rem;">
+                        実数値: --
+                    </div>
+                </div>
+
+                <!-- Swap Button -->
+                <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10;">
+                    <button id="swap-btn" style="background: var(--accent-primary); border: 2px solid var(--card-bg); width: 44px; height: 44px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s;" title="攻撃/防御を入れ替え" onmouseover="this.style.transform='scale(1.15) rotate(180deg)'" onmouseout="this.style.transform='scale(1) rotate(0deg)'">🔁</button>
+                    <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; user-select: none;">入れ替え</span>
+                </div>
+
+                <!-- Defender -->
+                <div class="card">
+                    <h2 style="display: flex; align-items: center; justify-content: space-between;">
+                        <span><span class="icon">🛡️</span> 防御側 (Defender)</span>
+                        <div id="defender-types-container" style="display: flex; gap: 0.4rem; font-size: 0.8rem; font-weight: normal;"></div>
+                    </h2>
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.2rem;">
+                        <img id="defender-img" src="" style="width: 56px; height: 56px; object-fit: contain; display: none; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));">
+                        <div class="input-group" style="flex-grow: 1; margin-bottom: 0;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:4px;">
+                                <label style="margin:0;">ポケモン選択</label>
+                                <button id="def-mega-btn" style="display:none; padding:2px 8px; font-size:0.75rem; background:linear-gradient(145deg, #bbaa66, #998844); border:1px solid #eedd99; border-radius:4px; color:white; cursor:pointer; font-weight:bold; box-shadow:0 0 8px rgba(187,170,102,0.3);" title="メガシンカ形態と切り替えます">ﾒｶﾞｼﾝｶ ✨</button>
+                            </div>
+                            <div style="position: relative;">
+                                <input type="search" id="defender-input" autocomplete="off" placeholder="名前で検索..." style="width: 100%; box-sizing: border-box;">
+                                <div id="defender-suggestions" class="autocomplete-suggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1e2433; border: 1px solid var(--glass-border); border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="input-group">
+                            <label>HPポイント</label>
+                            <input type="number" id="hp-ap" value="32" min="0" max="32">
+                        </div>
+                        <div class="input-group">
+                            <label>防御ポイント</label>
+                            <input type="number" id="def-ap" value="32" min="0" max="32">
+                        </div>
+                        <div class="input-group">
+                            <label>防御性格</label>
+                            <select id="def-nature">
+                                <option value="1.0" selected>無補正 (上昇等なし)</option>
+                                <option value="いじっぱり">いじっぱり (攻撃↑ / 特攻↓)</option>
+                                <option value="さみしがり">さみしがり (攻撃↑ / 防御↓)</option>
+                                <option value="ゆうかん">ゆうかん (攻撃↑ / 素早↓)</option>
+                                <option value="やんちゃ">やんちゃ (攻撃↑ / 特防↓)</option>
+                                <option value="ずぶとい">ずぶとい (防御↑ / 攻撃↓)</option>
+                                <option value="わんぱく">わんぱく (防御↑ / 特攻↓)</option>
+                                <option value="のんき">のんき (防御↑ / 素早↓)</option>
+                                <option value="おだやか">おだやか (特防↑ / 攻撃↓)</option>
+                                <option value="しんちょう">しんちょう (特防↑ / 特攻↓)</option>
+                                <option value="なまいき">なまいき (特防↑ / 素早↓)</option>
+                                <option value="ひかえめ">ひかえめ (特攻↑ / 攻撃↓)</option>
+                                <option value="れいせい">れいせい (特攻↑ / 素早↓)</option>
+                                <option value="うっかりや">うっかりや (特攻↑ / 特防↓)</option>
+                                <option value="おくびょう">おくびょう (素早↑ / 攻撃↓)</option>
+                                <option value="せっかち">せっかち (素早↑ / 防御↓)</option>
+                                <option value="ようき">ようき (素早↑ / 特攻↓)</option>
+                                <option value="むじゃき">むじゃき (素早↑ / 特防↓)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid" id="defender-atk-container" style="display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--glass-border);">
+                        <div class="input-group">
+                            <label style="color: #ff5959;">攻撃(イカサマ受)</label>
+                            <input type="number" id="def-atk-ap" value="32" min="0" max="32">
+                        </div>
+                        <div class="input-group">
+                            <label style="color: #ff5959;">攻撃性格</label>
+                            <select id="def-atk-nature">
+                                <option value="1.0" selected>無補正 (上昇等なし)</option>
+                                <option value="いじっぱり">いじっぱり (攻撃↑ / 特攻↓)</option>
+                                <option value="さみしがり">さみしがり (攻撃↑ / 防御↓)</option>
+                                <option value="ゆうかん">ゆうかん (攻撃↑ / 素早↓)</option>
+                                <option value="やんちゃ">やんちゃ (攻撃↑ / 特防↓)</option>
+                                <option value="ずぶとい">ずぶとい (防御↑ / 攻撃↓)</option>
+                                <option value="わんぱく">わんぱく (防御↑ / 特攻↓)</option>
+                                <option value="のんき">のんき (防御↑ / 素早↓)</option>
+                                <option value="おだやか">おだやか (特防↑ / 攻撃↓)</option>
+                                <option value="しんちょう">しんちょう (特防↑ / 特攻↓)</option>
+                                <option value="なまいき">なまいき (特防↑ / 素早↓)</option>
+                                <option value="ひかえめ">ひかえめ (特攻↑ / 攻撃↓)</option>
+                                <option value="れいせい">れいせい (特攻↑ / 素早↓)</option>
+                                <option value="うっかりや">うっかりや (特攻↑ / 特防↓)</option>
+                                <option value="おくびょう">おくびょう (素早↑ / 攻撃↓)</option>
+                                <option value="せっかち">せっかち (素早↑ / 防御↓)</option>
+                                <option value="ようき">ようき (素早↑ / 特攻↓)</option>
+                                <option value="むじゃき">むじゃき (素早↑ / 特防↓)</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label style="color: #ff5959;">ランク上昇</label>
+                            <select id="def-atk-rank">
+                                <option value="0">±0</option>
+                                <option value="1">+1</option>
+                                <option value="2">+2</option>
+                                <option value="-1">-1</option>
+                                <option value="-2">-2</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                        <label>特性 (Defender Ability)</label>
+                        <select id="def-ability" style="padding: 6px; font-size: 0.9rem;">
+                            <!-- Populated dynamically -->
+                            <option value="なし">（特性なし）</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                        <label>持ち物 (Defender Item) <span style="font-size:0.7rem; color:var(--glass-border);">(自由入力可)</span></label>
+                        <select id="def-item" style="padding: 6px; font-size: 0.9rem;">
+                            <option value="1.0">なし</option>
+                            <option value="メガナイト">メガナイト</option>
+                            <option value="とつげきチョッキ">とつげきチョッキ (特殊防御1.5倍)</option>
+                            <option value="しんかのきせき">しんかのきせき (進化前防御/特防1.5倍)</option>
+                            <option value="半減実">全半減実 (抜群被ダメ0.5倍)</option>
+                            <option value="こだわりハチマキ">こだわりハチマキ</option>
+                            <option value="こだわりメガネ">こだわりメガネ</option>
+                            <option value="こだわりスカーフ">こだわりスカーフ</option>
+                            <option value="いのちのたま">いのちのたま</option>
+                            <option value="タイプ強化アイテム">タイプ強化アイテム</option>
+                            <option value="きあいのタスキ">きあいのタスキ</option>
+                            <option value="たべのこし">たべのこし</option>
+                            <option value="かいがらのすず">かいがらのすず</option>
+                            <option value="ひかりのこな">ひかりのこな</option>
+                            <option value="せんせいのツメ">せんせいのツメ</option>
+                            <option value="ピントレンズ">ピントレンズ</option>
+                            <option value="おうじゃのしるし">おうじゃのしるし</option>
+                            <option value="オボンのみ">オボンのみ</option>
+                            <option value="ラムのみ">ラムのみ</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-group" style="margin-top: 1rem; margin-bottom: 0;">
+                        <label>定数ダメージ等 (合算)</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; background: rgba(20,25,40,0.8); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem;">
+                            <!-- Stealth Rock -->
+                            <label style="display:flex; align-items:center; justify-content:center; gap: 6px; cursor:pointer; background: linear-gradient(145deg, rgba(187, 170, 102, 0.2), rgba(187, 170, 102, 0.05)); border: 1px solid rgba(187, 170, 102, 0.5); padding: 6px 8px; border-radius: 6px; color: #eedd99; font-weight: bold; box-shadow: inset 0 0 10px rgba(187, 170, 102, 0.1);">
+                                <input type="checkbox" id="def-stealth-rock" style="width:16px; height:16px; margin:0; accent-color: #bbaa66;"> <span style="font-size:1.1em; margin-right:2px;">🪨</span> ステルスロック
+                            </label>
+                            <!-- Spikes -->
+                            <label style="display:flex; align-items:center; gap: 4px;">
+                                <select id="def-spikes" style="padding: 4px 6px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); width:100%; border-radius:4px;">
+                                    <option value="0">まきびし なし</option>
+                                    <option value="0.125">1回 (1/8)</option>
+                                    <option value="0.166">2回 (1/6)</option>
+                                    <option value="0.25">3回 (1/4)</option>
+                                </select>
+                            </label>
+                            <!-- Status -->
+                            <label style="display:flex; align-items:center; gap: 4px;">
+                                <select id="def-status" style="padding: 4px 6px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); width:100%; border-radius:4px;">
+                                    <option value="0">状態異常ダメ なし</option>
+                                    <option value="0.0625">火傷 (1/16)</option>
+                                    <option value="0.125">毒/宿木 (1/8)</option>
+                                </select>
+                            </label>
+                            <!-- Other -->
+                            <label style="display:flex; align-items:center; gap: 4px; grid-column: 1 / -1;">
+                                <select id="def-other-dmg" style="padding: 6px; font-size: 0.85rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); width:100%; border-radius:4px;">
+                                    <option value="0">その他 定数ダメージ・回復 なし</option>
+                                    <option value="0.125">1/8 (ゴツメ、鮫肌、てつのとげ等)</option>
+                                    <option value="0.166">1/6 (ゴツメ+砂 等)</option>
+                                    <option value="0.1">1/10 (いのちのたま反動等)</option>
+                                    <option value="-0.0625">たべのこし回復 (+1/16)</option>
+                                    <option value="-0.125">ポイズンヒール回復 (+1/8)</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="defender-real-stats" style="font-size: 0.8rem; color: var(--accent-primary); margin-top: 0.5rem;">
+                        実数値: HP -- / 防 --
+                    </div>
+                </div>
+
+
+                <!-- Result Card -->
+                <div class="card result-card">
+                    <h2>計算結果</h2>
+                    <div class="damage-text" id="damage-percentage">0% - 0%</div>
+                    <div style="position: relative; margin: 1.5rem 0;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; padding: 0 2px;">
+                            <span>0%</span>
+                            <span>50%</span>
+                            <span>100%</span>
+                        </div>
+                        <div class="damage-bar-container" style="margin: 0; position: relative;">
+                            <!-- 50% Marker Line -->
+                            <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.2); z-index: 5;"></div>
+                            <div class="damage-bar" id="damage-bar"></div>
+                        </div>
+                    </div>
+                    <p id="damage-description" style="color: var(--text-muted); font-size: 0.9rem;">
+                        ターゲットを入力すると計算が開始されます。
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Team Builder Panel -->
+        <div id="builder" class="panel">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>チーム編成</h2>
+                    <button id="clear-team-btn" style="background: rgba(255,100,100,0.2); border: 1px solid #ff6666; color: #ff6666; padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s;">全クリア</button>
+                </div>
+                <div class="team-grid" id="team-grid-container">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Panel -->
+        <div id="database" class="panel">
+            <div class="card" style="position: sticky; top: 130px; z-index: 50; margin-bottom: 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                <h2>データ検索</h2>
+                <div style="margin-top: 1rem;">
+                    <input type="search" placeholder="ポケモン名で検索..." id="search-input" list="pokemon-list" style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div id="type-filter-row" style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1rem;">
+                    <button class="type-filter-btn active" data-type="" style="padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: bold; cursor: pointer; border: 1px solid var(--glass-border); background: var(--card-bg); color: var(--text-muted); transition: all 0.2s;">すべて</button>
+                    <button class="type-filter-btn" data-type="favorite" style="padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: bold; cursor: pointer; border: 1px solid #ffd700; background: rgba(255, 215, 0, 0.1); color: #ffd700; transition: all 0.2s;">★ お気に入り</button>
+                    <button class="type-filter-btn type-badge ノーマル" data-type="ノーマル" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">ノーマル</button>
+                    <button class="type-filter-btn type-badge ほのお" data-type="ほのお" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">ほのお</button>
+                    <button class="type-filter-btn type-badge みず" data-type="みず" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">みず</button>
+                    <button class="type-filter-btn type-badge でんき" data-type="でんき" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">でんき</button>
+                    <button class="type-filter-btn type-badge くさ" data-type="くさ" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">くさ</button>
+                    <button class="type-filter-btn type-badge こおり" data-type="こおり" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">こおり</button>
+                    <button class="type-filter-btn type-badge かくとう" data-type="かくとう" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">かくとう</button>
+                    <button class="type-filter-btn type-badge どく" data-type="どく" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">どく</button>
+                    <button class="type-filter-btn type-badge じめん" data-type="じめん" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">じめん</button>
+                    <button class="type-filter-btn type-badge ひこう" data-type="ひこう" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">ひこう</button>
+                    <button class="type-filter-btn type-badge エスパー" data-type="エスパー" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">エスパー</button>
+                    <button class="type-filter-btn type-badge むし" data-type="むし" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">むし</button>
+                    <button class="type-filter-btn type-badge いわ" data-type="いわ" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">いわ</button>
+                    <button class="type-filter-btn type-badge ゴースト" data-type="ゴースト" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">ゴースト</button>
+                    <button class="type-filter-btn type-badge ドラゴン" data-type="ドラゴン" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">ドラゴン</button>
+                    <button class="type-filter-btn type-badge あく" data-type="あく" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">あく</button>
+                    <button class="type-filter-btn type-badge はがね" data-type="はがね" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">はがね</button>
+                    <button class="type-filter-btn type-badge フェアリー" data-type="フェアリー" style="cursor: pointer; border: 2px solid transparent; opacity: 0.4; transition: all 0.2s;">フェアリー</button>
+                </div>
+                <datalist id="pokemon-list"></datalist>
+            </div>
+            <div id="db-results"></div>
+        </div>
+
+        <!-- Speed Comparison Panel -->
+        <div id="speed" class="panel">
+            <div class="card" style="margin-bottom: 1.5rem; padding: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px dashed var(--glass-border); padding-bottom: 1rem;">
+                    <h2 style="margin: 0;"><span class="icon">🏃‍♂️💨</span> 素早さ比較（スカーフ・ランク補正対応）</h2>
+                    <button id="speed-import-team" style="padding: 0.6rem 1rem; background: linear-gradient(135deg, rgba(34, 193, 195, 0.6), rgba(253, 187, 45, 0.3)); border: 1px solid var(--glass-border); border-radius: 8px; color: white; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: bold; transition: all 0.2s;" onmouseover="this.style.background='linear-gradient(135deg, rgba(34, 193, 195, 0.9), rgba(253, 187, 45, 0.5))';" onmouseout="this.style.background='linear-gradient(135deg, rgba(34, 193, 195, 0.6), rgba(253, 187, 45, 0.3))';">
+                        <span>📋</span> チームからインポート
+                    </button>
+                </div>
+
+                <!-- Field Conditions for Speed -->
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border);">
+                    <div class="input-group" style="margin: 0;">
+                        <label>天候 (すいすい等の判定)</label>
+                        <select id="speed-weather" style="padding: 6px; font-size: 0.85rem; width: 140px;">
+                            <option value="none">通常</option>
+                            <option value="rain">雨 (すいすい)</option>
+                            <option value="sun">晴れ (ようりょくそ)</option>
+                            <option value="sand">砂嵐 (すなかき)</option>
+                            <option value="snow">雪 (ゆきかき)</option>
+                        </select>
+                    </div>
+                    <div class="input-group" style="margin: 0; display:flex; align-items:center; gap:0.5rem;">
+                        <input type="checkbox" id="speed-tailwind" style="width:16px; height:16px;">
+                        <label for="speed-tailwind" style="margin:0; font-size:0.9rem; color:var(--text-main); font-weight:bold; cursor:pointer;">🍃 おいかぜ (x2)</label>
+                    </div>
+                    <div class="input-group" style="margin: 0; display:flex; align-items:center; gap:0.5rem;">
+                        <input type="checkbox" id="speed-trickroom" style="width:16px; height:16px;">
+                        <label for="speed-trickroom" style="margin:0; font-size:0.9rem; color:#bbaa66; font-weight:bold; cursor:pointer;">🌀 トリックルーム</label>
+                    </div>
+                </div>
+
+                <!-- Benchmarks Visualizer -->
+                <h3 style="font-size:1.1rem; border-left:4px solid var(--accent-primary); padding-left:0.5rem; margin-bottom:1rem; color:white;">最速実数値ランキング</h3>
+                
+                <div id="speed-ladder" style="display:flex; flex-direction:column; gap:0.2rem; margin-bottom:1.5rem; background:rgba(0,0,0,0.2); padding:1rem; border-radius:12px; border:1px solid var(--glass-border);">
+                    <div style="color:var(--text-muted); font-size:0.85rem; text-align:center;">「チームからインポート」または下部の「手動追加」でポケモンを配置してください</div>
+                </div>
+
+                <!-- Add Custom Pokemon Box -->
+                <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.1); padding:1rem; border-radius:8px;">
+                    <div style="font-weight:bold; margin-bottom:0.8rem; color:#a8b8d0;">＋ 仮想敵を比較に追加</div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+                        <div style="flex: 2; min-width: 150px;">
+                            <label>ポケモン検索</label>
+                            <div style="position:relative;">
+                                <input type="search" id="speed-add-input" autocomplete="off" placeholder="名前で検索..." list="pokemon-list" style="width:100%; box-sizing:border-box; padding:0.4rem; font-size:0.85rem;">
+                            </div>
+                        </div>
+                        <div style="flex: 1; min-width: 80px;">
+                            <label>能力ポイント</label>
+                            <input type="number" id="speed-add-ev" min="0" max="32" step="1" value="32" style="width:100%; padding:0.4rem; font-size:0.85rem;">
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label>性格</label>
+                            <select id="speed-add-nature" style="width:100%; padding:0.4rem; font-size:0.85rem;">
+                                <option value="ようき" selected>素早↑ (+補正)</option>
+                                <option value="1.0">無補正</option>
+                                <option value="ゆうかん">素早↓ (-補正)</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label>道具/状態</label>
+                            <select id="speed-add-item" style="width:100%; padding:0.4rem; font-size:0.85rem;">
+                                <option value="1.0">なし</option>
+                                <option value="こだわりスカーフ">スカーフ(x1.5)</option>
+                                <option value="くろいてっきゅう">鉄球(x0.5)</option>
+                                <option value="まひ">まひ状態(x0.5)</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 80px;">
+                            <label>ランク</label>
+                            <select id="speed-add-rank" style="width:100%; padding:0.4rem; font-size:0.85rem;">
+                                <option value="0">±0</option>
+                                <option value="1">+1</option>
+                                <option value="2">+2</option>
+                                <option value="3">+3</option>
+                                <option value="4">+4</option>
+                                <option value="5">+5</option>
+                                <option value="6">+6</option>
+                                <option value="-1">-1</option>
+                                <option value="-2">-2</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 100px;">
+                            <label>特性恩恵</label>
+                            <select id="speed-add-ability" style="width:100%; padding:0.4rem; font-size:0.85rem;">
+                                <option value="false">通常</option>
+                                <option value="true">天候2倍特性</option>
+                            </select>
+                        </div>
+                        <button id="speed-add-btn" style="height: 38px; padding: 0 1.2rem; background: var(--accent-primary); border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold; transition: background 0.2s;">追加</button>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+        
+
+        <!-- Pokemon Modal Container -->
+        <div id="pokemon-modal" class="modal-overlay">
+            <div class="modal-content">
+                <button class="modal-close" onclick="closeModal()">×</button>
+                <div id="modal-body"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="data/abilityData.js"></script>
+    <script src="data/movesData.js"></script>
+    <script src="data/masterData.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/speedTracker.js"></script>
+
+    <script>
+        // Proper Service Worker registration for offline support
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker Registered'))
+                    .catch(err => console.log('Service Worker Registration Failed:', err));
+            });
+        }
+    </script>
+</body>
+
+</html>
