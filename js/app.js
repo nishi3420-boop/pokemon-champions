@@ -640,6 +640,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedCalcState.atkBurn !== undefined && document.getElementById('atk-burn')) {
         document.getElementById('atk-burn').checked = savedCalcState.atkBurn;
     }
+    if (savedCalcState.fieldHelpingHand !== undefined && document.getElementById('field-helping-hand')) {
+        document.getElementById('field-helping-hand').checked = savedCalcState.fieldHelpingHand;
+    }
+    if (savedCalcState.fieldPowerSpot !== undefined && document.getElementById('field-power-spot')) {
+        document.getElementById('field-power-spot').checked = savedCalcState.fieldPowerSpot;
+    }
+    if (savedCalcState.defFullHp !== undefined && document.getElementById('def-full-hp')) {
+        document.getElementById('def-full-hp').checked = savedCalcState.defFullHp;
+    }
     restoreVal('atk-item', 'atkItem');
     restoreVal('def-item', 'defItem');
     restoreVal('field-weather', 'fieldWeather');
@@ -1332,12 +1341,12 @@ document.addEventListener('DOMContentLoaded', () => {
             extraPowerUI.style.display = 'none';
         }
 
-        if (move.name === 'ウェザーボール' && fieldWeather !== 'none') {
-            power = 100;
-        }
-
         if(power === 0) return; // Cannot calculate damage for status or fixed damage easily
         
+        let fieldDmgMod = 1.0;
+        if (document.getElementById('field-helping-hand')?.checked) fieldDmgMod *= 1.5;
+        if (document.getElementById('field-power-spot')?.checked) fieldDmgMod *= 1.3;
+
         let abilityDmgMod = 1.0;
         if ((atkAbility === 'もうか' && moveType === 'ほのお') ||
             (atkAbility === 'しんりょく' && moveType === 'くさ') ||
@@ -1370,6 +1379,10 @@ document.addEventListener('DOMContentLoaded', () => {
             abilityDmgMod *= 0.5;
         } else if (defAbility === 'すいほう' && moveType === 'ほのお') {
             abilityDmgMod *= 0.5;
+        } else if ((defAbility === 'マルチスケイル' || defAbility === 'ファントムガード') && document.getElementById('def-full-hp')?.checked) {
+            abilityDmgMod *= 0.5;
+        } else if ((defAbility === 'フィルター' || defAbility === 'ハードロック' || defAbility === 'プリズムアーマー') && typeMod > 1.0) {
+            abilityDmgMod *= 0.75;
         }
         
         let baseDamage = Math.floor(Math.floor(Math.floor(2 * lv / 5 + 2) * power * finalAtk / finalDefReal) / 50 + 2);
@@ -1378,9 +1391,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Final modifiers applied sequentially
-        // baseDamage * (0.85~1.0) * STAB * TypeMod * WeatherMod * TerrainMod * OtherMods * Ability Mod * WallMod
-        const minDamage = Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(baseDamage * 0.85 * stab * typeMod) * weatherMoveMod) * terrainMoveMod) * abilityDmgMod) * damageReductionMod) * wallMod);
-        const maxDamage = Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(baseDamage * 1.0 * stab * typeMod) * weatherMoveMod) * terrainMoveMod) * abilityDmgMod) * damageReductionMod) * wallMod);
+        // baseDamage * (0.85~1.0) * STAB * TypeMod * WeatherMod * TerrainMod * OtherMods * Ability Mod * WallMod * FieldDmgMod
+        const minDamage = Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(baseDamage * 0.85 * stab * typeMod) * weatherMoveMod) * terrainMoveMod) * abilityDmgMod) * damageReductionMod) * wallMod) * fieldDmgMod);
+        const maxDamage = Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(baseDamage * 1.0 * stab * typeMod) * weatherMoveMod) * terrainMoveMod) * abilityDmgMod) * damageReductionMod) * wallMod) * fieldDmgMod);
 
         const minPercent = ((minDamage / hpReal) * 100).toFixed(1);
         const maxPercent = ((maxDamage / hpReal) * 100).toFixed(1);
@@ -1500,11 +1513,14 @@ document.addEventListener('DOMContentLoaded', () => {
             fieldTerrain: document.getElementById('field-terrain').value,
             fieldReflect: document.getElementById('field-reflect').checked,
             fieldLightscreen: document.getElementById('field-lightscreen').checked,
+            fieldHelpingHand: document.getElementById('field-helping-hand')?.checked,
+            fieldPowerSpot: document.getElementById('field-power-spot')?.checked,
             atkBurn: document.getElementById('atk-burn').checked,
             stealthRock: document.getElementById('def-stealth-rock').checked,
             defSpikes: document.getElementById('def-spikes').value,
             defStatus: document.getElementById('def-status').value,
-            defOther: document.getElementById('def-other-dmg').value
+            defOther: document.getElementById('def-other-dmg').value,
+            defFullHp: document.getElementById('def-full-hp')?.checked
         };
         localStorage.setItem('pokemon_champions_calc', JSON.stringify(stateToSave));
     };
@@ -1534,7 +1550,8 @@ document.addEventListener('DOMContentLoaded', () => {
         'hp-ap', 'def-ap', 'def-nature', 'def-rank', 'def-item', 'def-ability',
         'def-atk-ap', 'def-atk-nature', 'def-atk-rank',
         'field-weather', 'field-terrain', 'field-reflect', 'field-lightscreen',
-        'def-stealth-rock', 'def-spikes', 'def-status', 'def-other-dmg'
+        'field-helping-hand', 'field-power-spot',
+        'def-stealth-rock', 'def-spikes', 'def-status', 'def-other-dmg', 'def-full-hp'
     ];
     inputs.forEach(id => {
         const el = document.getElementById(id);
