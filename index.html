@@ -89,7 +89,10 @@
                     </div>
                     <div class="input-group">
                         <label>使用する技</label>
-                        <select id="move-select"></select>
+                        <div id="move-picker-trigger" class="custom-select" style="cursor: pointer; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; padding: 0.8rem; display: flex; justify-content: space-between; align-items: center;" data-val="">
+                            <span id="selected-move-name">技を選択してください</span>
+                            <span style="font-size: 0.8rem; opacity: 0.5;">▼</span>
+                        </div>
                         <div id="move-details-container" style="display: flex; gap: 0.5rem; margin-top: 0.6rem; min-height: 24px;">
                             <!-- Move Badges will be injected here -->
                         </div>
@@ -368,21 +371,27 @@
 
                 <!-- Result Card -->
                 <div class="card result-card">
-                    <h2>計算結果</h2>
-                    <div class="damage-text" id="damage-percentage">0% - 0%</div>
-                    <div style="position: relative; margin: 1.5rem 0;">
-                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; padding: 0 2px;">
+                    <h2 style="margin-bottom: 0.5rem;">計算結果</h2>
+                    <div class="damage-text" id="damage-percentage" style="font-size: 1.8rem; font-weight: 800; color: white; margin-bottom: 0.5rem;">0% - 0%</div>
+                    
+                    <div style="position: relative; margin: 2rem 0 1rem 0; width: 100%;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 6px; position: absolute; width: 100%; top: -1.2rem;">
                             <span>0%</span>
+                            <span>25%</span>
                             <span>50%</span>
+                            <span>75%</span>
                             <span>100%</span>
                         </div>
-                        <div class="damage-bar-container" style="margin: 0; position: relative;">
-                            <!-- 50% Marker Line -->
-                            <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.2); z-index: 5;"></div>
-                            <div class="damage-bar" id="damage-bar"></div>
+                        <div class="damage-bar-container" style="height: 16px; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; overflow: hidden; position: relative; margin:0;">
+                            <!-- Markers -->
+                            <div style="position: absolute; left: 25%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.15); z-index: 5;"></div>
+                            <div style="position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.3); z-index: 5;"></div>
+                            <div style="position: absolute; left: 75%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.15); z-index: 5;"></div>
+                            <div class="damage-bar" id="damage-bar" style="height: 100%; transition: width 0.4s cubic-bezier(0.1, 0.7, 0.1, 1);"></div>
                         </div>
                     </div>
-                    <p id="damage-description" style="color: var(--text-muted); font-size: 0.9rem;">
+                    
+                    <p id="damage-description" style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.4;">
                         ターゲットを入力すると計算が開始されます。
                     </p>
                 </div>
@@ -392,9 +401,13 @@
         <!-- Team Builder Panel -->
         <div id="builder" class="panel">
             <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2>チーム編成</h2>
-                    <button id="clear-team-btn" style="background: rgba(255,100,100,0.2); border: 1px solid #ff6666; color: #ff6666; padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s;">全クリア</button>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <h2 style="margin: 0;">チーム編成</h2>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button id="export-team-btn" style="background: rgba(0,210,255,0.1); border: 1px solid var(--neon-blue); color: var(--neon-blue); padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">エクスポート</button>
+                        <button id="import-team-btn" style="background: rgba(157,80,187,0.1); border: 1px solid var(--neon-purple); color: var(--neon-purple); padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">インポート</button>
+                        <button id="clear-team-btn" style="background: rgba(255,100,100,0.1); border: 1px solid #ff6666; color: #ff6666; padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold;">全クリア</button>
+                    </div>
                 </div>
                 <div class="team-grid" id="team-grid-container">
                     <!-- Populated dynamically via JS -->
@@ -405,7 +418,10 @@
         <!-- Database Panel -->
         <div id="database" class="panel">
             <div class="card" style="position: sticky; top: 130px; z-index: 50; margin-bottom: 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-                <h2>データ検索</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="margin: 0;">データ検索</h2>
+                    <button id="close-all-cards-btn" style="background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-muted); padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s;" onmouseover="this.style.color='var(--danger)'; this.style.borderColor='var(--danger)';" onmouseout="this.style.color='var(--text-muted)'; this.style.borderColor='var(--glass-border)';">カードをすべて閉じる</button>
+                </div>
                 <div style="margin-top: 1rem;">
                     <input type="search" placeholder="ポケモン名で検索..." id="search-input" list="pokemon-list" style="width: 100%; box-sizing: border-box;">
                 </div>

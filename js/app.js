@@ -68,10 +68,154 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const genMoveSel = (id, val) => {
-            return `<div style="display:flex; gap:4px; align-items:center;"><select id="${id}" style="flex:1; padding:0.4rem; background:rgba(0,0,0,0.3); color:white; border:1px solid var(--glass-border); border-radius:4px;">
-                ${moveOptions.replace(`value="${val}"`, `value="${val}" selected`)}
-            </select><button class="te-move-info-btn" data-sel="${id}" style="padding:0.3rem 0.5rem; background:rgba(0,210,255,0.2); border:1px solid var(--neon-blue); border-radius:4px; color:var(--neon-blue); cursor:pointer; font-size:0.75rem; white-space:nowrap;">詳細</button></div>`;
+            const mvId = val || '';
+            const mvName = (typeof MOVES_DICT !== 'undefined' && MOVES_DICT[mvId]) ? MOVES_DICT[mvId].name : (mvId === '' || mvId === 'なし' ? '（なし）' : mvId);
+            return `<button id="${id}" data-val="${mvId}" class="te-move-trigger" style="width:100%; padding:0.6rem; background:rgba(0,0,0,0.5); color:white; border:1px solid var(--glass-border); border-radius:6px; text-align:left; font-size:0.9rem; cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.5)'">
+                <span style="font-weight:bold;">${mvName}</span>
+                <span style="font-size:0.75rem; color:var(--accent-primary);">技を選択 🔄</span>
+            </button>`;
         };
+
+        const openMovePicker = (targetId) => {
+            const trigger = document.getElementById(targetId);
+            const mList = window.getMovesForPokemon(p.name) || [];
+            const mappedMoves = mList.map(mid => MOVES_DICT[mid]).filter(x => x);
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = "position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:100000; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(8px);";
+            
+            overlay.innerHTML = `
+                <div style="background:var(--card-bg); border:1px solid var(--neon-blue); border-radius:12px; padding:1.2rem; width:95%; max-width:450px; max-height:85vh; display:flex; flex-direction:column; gap:0.8rem; box-shadow:0 0 50px rgba(0,0,0,1);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:0.6rem;">
+                        <h4 style="margin:0; font-size:1.1rem; color:var(--neon-blue);">技を選択</h4>
+                        <button class="mp-close" style="background:none; border:none; color:#a8b8d0; font-size:1.5rem; cursor:pointer;">×</button>
+                    </div>
+
+                    <div style="position:relative;">
+                        <input type="text" class="mp-search" placeholder="技名で検索..." style="width:100%; padding:0.6rem 0.8rem; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:8px; color:white; font-size:0.9rem;">
+                    </div>
+                    
+                    <div style="display:flex; gap:0.3rem;" class="mp-filters">
+                        <button class="mp-f active" data-filter="all" style="flex:1; padding:6px; font-size:0.75rem; background:var(--accent-primary); border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;">すべて</button>
+                        <button class="mp-f" data-filter="物理" style="flex:1; padding:6px; font-size:0.75rem; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); border-radius:4px; color:#ff6b6b; cursor:pointer;">物理</button>
+                        <button class="mp-f" data-filter="特殊" style="flex:1; padding:6px; font-size:0.75rem; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); border-radius:4px; color:#4dabf7; cursor:pointer;">特殊</button>
+                        <button class="mp-f" data-filter="変化" style="flex:1; padding:6px; font-size:0.75rem; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); border-radius:4px; color:#adb5bd; cursor:pointer;">変化</button>
+                    </div>
+
+                    <div class="mp-list" style="flex:1; overflow-y:auto; border:1px solid var(--glass-border); border-radius:8px; background:rgba(0,0,0,0.2); scrollbar-width: thin;">
+                        <div data-mid="なし" style="padding:0.8rem; border-bottom:1px solid var(--glass-border); cursor:pointer; text-align:center; color:var(--text-muted); font-size:0.9rem;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">選択解除 (なし)</div>
+                    </div>
+                </div>
+            `;
+
+            let currentFilter = 'all';
+            let searchQuery = '';
+
+            const renderMoves = () => {
+                const list = overlay.querySelector('.mp-list');
+                const clearBtn = list.querySelector('[data-mid="なし"]');
+                list.innerHTML = "";
+                list.appendChild(clearBtn);
+
+                let filtered = mappedMoves;
+                if (currentFilter !== 'all') filtered = filtered.filter(m => m.category === currentFilter);
+                if (searchQuery) filtered = filtered.filter(m => m.name.includes(searchQuery) || (m.nameEn && m.nameEn.toLowerCase().includes(searchQuery.toLowerCase())));
+
+                // Grouping by type
+                const groups = {};
+                filtered.forEach(mv => {
+                    const type = tMapGlobal[mv.type] || mv.type;
+                    if (!groups[type]) groups[type] = [];
+                    groups[type].push(mv);
+                });
+
+                const sortedTypes = Object.keys(groups).sort((a,b) => {
+                    const aIsP = p.types.includes(a);
+                    const bIsP = p.types.includes(b);
+                    if(aIsP && !bIsP) return -1;
+                    if(!aIsP && bIsP) return 1;
+                    return a.localeCompare(b);
+                });
+
+                sortedTypes.forEach(type => {
+                    const isStabGroup = p.types.includes(type);
+                    const typeHeader = document.createElement('div');
+                    typeHeader.style.cssText = "padding:0.5rem 0.8rem; background:rgba(255,255,255,0.02); border-bottom:2px solid var(--glass-border); display:flex; align-items:center; gap:0.6rem;";
+                    typeHeader.innerHTML = `
+                        <span class="type-badge ${type}" style="font-size: 0.7rem; border:1px solid rgba(255,255,255,0.2); border-radius:20px; padding:2px 10px;">${type}</span>
+                        ${isStabGroup ? '<span style="font-size:0.65rem; background:rgba(255,215,0,0.15); color:#ffd700; border:1px solid #ffd700; padding:1px 6px; border-radius:10px; font-weight:bold;">タイプ一致 Bonus</span>' : ''}
+                    `;
+                    list.appendChild(typeHeader);
+
+                    groups[type].sort((a,b) => (b.power || 0) - (a.power || 0)).forEach(mv => {
+                        const row = document.createElement('div');
+                        const fullType = tMapGlobal[mv.type] || mv.type;
+                        let catBg = mv.category === '物理' ? '#e24b4b' : (mv.category === '特殊' ? '#4068e0' : '#8899a6');
+                        row.style.cssText = "padding:0.8rem; border-bottom:1px solid var(--glass-border); cursor:pointer; transition: background 0.2s;";
+                        row.innerHTML = `
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                <span style="font-weight:bold; color:white; font-size:1rem;">${mv.name}</span>
+                                <span class="type-badge ${fullType}" style="zoom: 0.75;">${fullType}</span>
+                            </div>
+                            <div style="display:flex; gap:0.5rem; font-size:0.75rem; color:var(--text-muted); align-items:center; margin-bottom:4px;">
+                                <span style="color:${catBg}; border:1px solid ${catBg}; padding:1px 4px; border-radius:3px; font-weight:bold;">${mv.category}</span>
+                                <span>威力: <b style="color:white;">${mv.power||'-'}</b></span>
+                                <span>命中: <b style="color:white;">${mv.acc||'-'}</b></span>
+                                <span>PP: <b style="color:white;">${mv.pp}</b></span>
+                            </div>
+                            <div style="font-size:0.75rem; color:#8899a6; line-height:1.4;">${mv.desc || ''}</div>
+                        `;
+                        row.onmouseover = () => row.style.background = 'rgba(255,255,255,0.08)';
+                        row.onmouseout = () => row.style.background = 'transparent';
+                        row.onclick = () => {
+                            trigger.dataset.val = mv.name;
+                            trigger.querySelector('span:first-child').innerText = mv.name;
+                            overlay.remove();
+                        };
+                        list.appendChild(row);
+                    });
+                });
+                
+                if (filtered.length === 0) {
+                   const empty = document.createElement('div');
+                   empty.style.padding = '2rem';
+                   empty.style.textAlign = 'center';
+                   empty.style.color = 'var(--text-muted)';
+                   empty.innerText = '該当する技がありません';
+                   list.appendChild(empty);
+                }
+
+                clearBtn.onclick = () => {
+                    trigger.dataset.val = "";
+                    trigger.querySelector('span:first-child').innerText = '（なし）';
+                    overlay.remove();
+                };
+            };
+
+            overlay.querySelector('.mp-close').onclick = () => overlay.remove();
+            
+            overlay.querySelector('.mp-search').oninput = (e) => {
+                searchQuery = e.target.value.trim();
+                renderMoves();
+            };
+
+            overlay.querySelectorAll('.mp-f').forEach(btn => {
+                btn.onclick = () => {
+                    overlay.querySelectorAll('.mp-f').forEach(b => {
+                        b.style.background = 'rgba(0,0,0,0.3)';
+                        b.style.fontWeight = 'normal';
+                    });
+                    btn.style.background = 'var(--accent-primary)';
+                    btn.style.fontWeight = 'bold';
+                    currentFilter = btn.dataset.filter;
+                    renderMoves();
+                };
+            });
+
+            renderMoves();
+            document.body.appendChild(overlay);
+        };
+
 
         const innerContent = `
                 <div style="background:var(--card-bg); border: 1px solid var(--glass-border); border-radius:12px; padding:1.5rem; width:90%; max-width:550px; color:white; display:flex; flex-direction:column; gap:1rem; max-height:90vh; overflow-y:auto;">
@@ -309,91 +453,9 @@ document.addEventListener('DOMContentLoaded', () => {
         evInputs.forEach(i => i.addEventListener('input', updateRealStats));
         document.getElementById('te-nature').addEventListener('change', updateRealStats);
         
-        const moveSelectorsList = ['te-m1', 'te-m2', 'te-m3', 'te-m4'].map(id => document.getElementById(id));
-        
-        const updateMoveVisibilities = () => {
-            const selectedVals = moveSelectorsList.map(s => s?.value).filter(v => v && v !== 'なし' && v !== '技を選択');
-            moveSelectorsList.forEach(sel => {
-                if(!sel) return;
-                const currentVal = sel.value;
-                Array.from(sel.options).forEach(opt => {
-                    if (!opt.value || opt.value === 'なし' || opt.value === '技を選択') {
-                         opt.style.display = '';
-                         opt.disabled = false;
-                         return;
-                    }
-                    if (selectedVals.includes(opt.value) && opt.value !== currentVal) {
-                        opt.style.display = 'none';
-                        opt.disabled = true;
-                    } else {
-                        opt.style.display = '';
-                        opt.disabled = false;
-                    }
-                });
-            });
-        };
-
-        moveSelectorsList.forEach(sel => {
-            if(!sel) return;
-            sel.addEventListener('change', updateMoveVisibilities);
-        });
-        updateMoveVisibilities();
-
-        updateEVTracker();
-        updateRealStats();
-
-        // --- Info button helpers (moves, abilities, items) ---
-        const ITEM_DESC = {
-            'なし': '持ち物なし',
-            'メガナイト': 'メガシンカに必要な石。対応するポケモンのみ使用可能。',
-            'こだわりハチマキ': '物理技の威力が1.5倍になる。ただし同じ技しか出せなくなる。',
-            'こだわりメガネ': '特殊技の威力が1.5倍になる。ただし同じ技しか出せなくなる。',
-            'こだわりスカーフ': '素早さが1.5倍になる。ただし同じ技しか出せなくなる。',
-            'いのちのたま': '技の威力が1.3倍になるが、攻撃する度にHPが減る。',
-            'タイプ強化アイテム': '特定タイプの技威力が1.2倍。達人の帯は弱点技が1.2倍。',
-            'とつげきチョッキ': '特防が1.5倍になる。ただし変化技が使えなくなる。',
-            'しんかのきせき': '進化前ポケモンの防御と特防が1.5倍になる。',
-            '半減実': '弱点タイプの技を受けた場合、ダメージを半減する（1回のみ）。',
-            'きあいのタスキ': 'HP満タンの時、一撃で倒される攻撃を受けてもHP1で耐える。',
-            'たべのこし': '毎ターン最大HPの1/16を回復する。',
-            'かいがらのすず': '与えたダメージの1/8だけHPを回復する。',
-            'ひかりのこな': '相手の技の命中率が0.9倍になる。',
-            'せんせいのツメ': '20%の確率で先制攻撃できる。',
-            'ピントレンズ': '技の急所率が1段階上がる。',
-            'おうじゃのしるし': '攻撃技を当てると10%の確率で相手がひるむ。',
-            'オボンのみ': 'HPが半分以下になると最大HPの1/4を回復する。',
-            'ラムのみ': '状態異常になった時、自動で回復する。'
-        };
-
-        const showInfoPopup = (title, desc) => {
-            let popup = document.getElementById('te-info-popup');
-            if (popup) popup.remove();
-            popup = document.createElement('div');
-            popup.id = 'te-info-popup';
-            popup.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(18,22,31,0.98); border:1px solid var(--neon-blue); border-radius:10px; padding:1.2rem; max-width:350px; z-index:99999; box-shadow:0 10px 30px rgba(0,0,0,0.8); color:white;';
-            popup.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
-                    <h4 style="margin:0; color:var(--neon-blue); font-size:1.1rem;">${title}</h4>
-                    <button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:#a8b8d0; font-size:1.3rem; cursor:pointer;">×</button>
-                </div>
-                <p style="margin:0; font-size:0.9rem; color:var(--text-muted); line-height:1.5;">${desc || '説明データなし'}</p>
-            `;
-            document.body.appendChild(popup);
-        };
-
-        // Move info buttons
-        document.querySelectorAll('.te-move-info-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const selId = btn.dataset.sel;
-                const sel = document.getElementById(selId);
-                if (!sel || !sel.value || sel.value === '-- 技を選択 --') { showInfoPopup('技', '技が選択されていません'); return; }
-                const mv = typeof MOVES_DICT !== 'undefined' ? MOVES_DICT[sel.value] : null;
-                if (mv) {
-                    const tMap = {'ノ':'ノーマル','炎':'ほのお','水':'みず','草':'くさ','電':'でんき','氷':'こおり','格':'かくとう','毒':'どく','地':'じめん','飛':'ひこう','エ':'エスパー','虫':'むし','岩':'いわ','ゴ':'ゴースト','ド':'ドラゴン','悪':'あく','鋼':'はがね','妖':'フェアリー'};
-                    const fullType = tMap[mv.type] || mv.type;
-                    showInfoPopup(mv.name, `タイプ: ${fullType} ｜ 分類: ${mv.category}<br>威力: ${mv.power} ｜ 命中: ${mv.acc} ｜ PP: ${mv.pp}<br><br>${mv.desc || '説明なし'}`);
-                } else { showInfoPopup('技', '技データが見つかりません'); }
-            });
+        // Move triggers
+        document.querySelectorAll('.te-move-trigger').forEach(btn => {
+            btn.onclick = () => openMovePicker(btn.id);
         });
 
         // Ability info button
@@ -421,10 +483,10 @@ document.addEventListener('DOMContentLoaded', () => {
             currentTeam[index].ability = document.getElementById('te-ability') ? document.getElementById('te-ability').value : '';
             currentTeam[index].nature = document.getElementById('te-nature').value;
             currentTeam[index].item = document.getElementById('te-item').value;
-            currentTeam[index].m1 = document.getElementById('te-m1').value;
-            currentTeam[index].m2 = document.getElementById('te-m2').value;
-            currentTeam[index].m3 = document.getElementById('te-m3').value;
-            currentTeam[index].m4 = document.getElementById('te-m4').value;
+            currentTeam[index].m1 = document.getElementById('te-m1').dataset.val;
+            currentTeam[index].m2 = document.getElementById('te-m2').dataset.val;
+            currentTeam[index].m3 = document.getElementById('te-m3').dataset.val;
+            currentTeam[index].m4 = document.getElementById('te-m4').dataset.val;
             window.saveTeam();
             window.renderTeamBuilder();
             document.getElementById('team-editor-overlay').remove();
@@ -477,40 +539,63 @@ document.addEventListener('DOMContentLoaded', () => {
                      if(m < 1.0) return '#44aaff';
                      return '#ffffff';
                 };
-                const getMoveName = m => (!m || m === 'なし') ? '-' : (typeof MOVES_DICT !== 'undefined' && MOVES_DICT[m] ? MOVES_DICT[m].name : m);
+                const getMoveBadge = mName => {
+                    const mv = (!mName || mName === 'なし') ? null : (typeof MOVES_DICT !== 'undefined' && MOVES_DICT[mName] ? MOVES_DICT[mName] : Object.values(MOVES_DICT).find(x => x.name === mName));
+                    if (!mv) return `<div style="background:rgba(255,255,255,0.05); padding:3px 5px; border-radius:4px; color:#666; font-size:0.7rem;">-</div>`;
+                    
+                    const mType = tMapGlobal[mv.type] || mv.type;
+                    const isStab = p.types.includes(mType);
+                    const catBg = mv.category === '物理' ? '#e24b4b' : (mv.category === '特殊' ? '#4068e0' : '#8899a6');
+                    
+                    return `
+                        <div style="background:rgba(0,0,0,0.4); border: 1px solid ${isStab ? 'var(--accent-primary)' : 'rgba(255,255,255,0.1)'}; padding:2px 4px; border-radius:4px; display:flex; flex-direction:column; gap:1px; min-width:0; position:relative;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:2px;">
+                                <span style="font-weight:bold; color:${isStab ? 'var(--accent-primary)' : '#fff'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1;">${mv.name}</span>
+                                <span class="type-badge ${mType}" style="font-size:0.5rem; padding:1px 3px; border-radius:3px;">${mv.type}</span>
+                            </div>
+                            <div style="font-size:0.6rem; color:var(--text-muted); display:flex; justify-content:space-between;">
+                                <span style="color:${catBg}; font-weight:bold;">${mv.category}</span>
+                                <span>${mv.power||'-'}/${mv.acc||'-'}</span>
+                            </div>
+                            ${isStab ? '<div style="position:absolute; top:-2px; right:-2px; width:4px; height:4px; background:var(--accent-primary); border-radius:50%; box-shadow: 0 0 5px var(--accent-primary);"></div>' : ''}
+                        </div>
+                    `;
+                };
                 
                 slot.innerHTML = `
                     <div title="外す" class="team-remove-btn" data-index="${i}" style="position:absolute; top:-8px; right:-8px; background:#ff4444; width:24px; height:24px; border-radius:50%; font-weight:bold; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.5); z-index:10; transition: transform 0.1s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';">✕</div>
-                    <img src="${p.imageUrl}" style="width: 84px; height: 84px; object-fit: contain; filter: drop-shadow(0 0 5px rgba(255,255,255,0.2));" />
-                    <div style="font-weight:bold; font-size: 1.05rem; margin-top: 0.4rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center;">${p.name}</div>
+                    <img src="${p.imageUrl}" style="width: 80px; height: 80px; object-fit: contain; filter: drop-shadow(0 0 8px rgba(0,210,255,0.2));" />
+                    <div style="font-weight:900; font-size: 1rem; margin-top: 0.2rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; text-align:center; color:var(--text-main);">${p.name}</div>
                     
-                    <div style="display:flex; gap: 0.2rem; margin-top: 0.3rem; justify-content:center; flex-wrap:wrap;">
-                        ${p.types.map(t => `<span class="type-badge ${t}" style="font-size:0.6rem; padding: 2px 5px;">${t}</span>`).join('')}
+                    <div style="display:flex; gap: 0.2rem; margin-top: 0.2rem; justify-content:center;">
+                        ${p.types.map(t => `<span class="type-badge ${t}" style="font-size:0.55rem; padding: 1px 4px;">${t}</span>`).join('')}
                     </div>
                     
-                    <div style="margin-top: 8px; font-size: 0.75rem; color: #a8b8d0; width: 100%; border-top: 1px dashed rgba(255,255,255,0.1); padding-top:6px;">
-                        <table style="width:100%; text-align:center; border-collapse:separate; border-spacing: 2px 4px; table-layout:fixed;">
-                            <tr style="color:var(--text-muted); font-size:0.8rem; font-weight:bold;"><td style="color:#ff5959">H</td><td style="color:#f5ac78">A</td><td style="color:#fae078">B</td><td style="color:#9db7f5">C</td><td style="color:#a2db80">D</td><td style="color:#fa92b2">S</td></tr>
-                            <tr style="font-weight:bold; color:var(--text-muted); font-size:0.75rem;" title="種族値"><td>${p.stats.hp}</td><td>${p.stats.atk}</td><td>${p.stats.def}</td><td>${p.stats.spa}</td><td>${p.stats.spd}</td><td>${p.stats.spe}</td></tr>
-                            <tr style="font-weight:bold; font-size:0.7rem; color:#8899a6;" title="能力値(AP)"><td>${slotData.hp||0}</td><td>${slotData.atk||0}</td><td>${slotData.def||0}</td><td>${slotData.spa||0}</td><td>${slotData.spd||0}</td><td>${slotData.spe||0}</td></tr>
-                            <tr style="font-weight:bold; font-size:0.95rem; letter-spacing:0px;" title="実数値"><td style="color:#ffffff;">${realHp}</td><td style="color:${getNatColor('atk')};">${realAtk}</td><td style="color:${getNatColor('def')};">${realDef}</td><td style="color:${getNatColor('spa')};">${realSpa}</td><td style="color:${getNatColor('spd')};">${realSpd}</td><td style="color:${getNatColor('spe')};">${realSpe}</td></tr>
+                    <div style="margin-top: 6px; font-size: 0.75rem; color: #a8b8d0; width: 100%; border-top: 1px solid rgba(255,255,255,0.08); padding-top:4px;">
+                        <table style="width:100%; text-align:center; border-collapse:separate; border-spacing: 1px 2px; table-layout:fixed;">
+                            <tr style="color:var(--text-muted); font-size:0.65rem; font-weight:bold; opacity:0.8;"><td>H</td><td>A</td><td>B</td><td>C</td><td>D</td><td>S</td></tr>
+                            <tr style="font-weight:900; font-size:0.85rem; letter-spacing:-0.5px;"><td style="color:#ffffff;">${realHp}</td><td style="color:${getNatColor('atk')};">${realAtk}</td><td style="color:${getNatColor('def')};">${realDef}</td><td style="color:${getNatColor('spa')};">${realSpa}</td><td style="color:${getNatColor('spd')};">${realSpd}</td><td style="color:${getNatColor('spe')};">${realSpe}</td></tr>
                         </table>
                     </div>
                     
-                    <div style="margin-top: 6px; padding-top:6px; border-top: 1px dashed rgba(255,255,255,0.1); font-size: 0.8rem; text-align:left; line-height:1.3;">
-                         <div style="margin-bottom:2px;"><span style="color:#a8b8d0;">特性:</span> <span style="font-weight:bold; color:#fff; font-size: 0.85rem;">${slotData.ability || '-'}</span></div>
-                         <div style="margin-bottom:6px;"><span style="color:#a8b8d0;">持物:</span> <span style="font-weight:bold; color:#f0d050; font-size: 0.85rem;">${slotData.item && slotData.item !== '1.0' && slotData.item !== 'なし' ? slotData.item : '-'}</span></div>
-                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px; font-size:0.75rem;">
-                             <div style="background:rgba(0,0,0,0.3); padding:3px 5px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#fff;">${getMoveName(slotData.m1)}</div>
-                             <div style="background:rgba(0,0,0,0.3); padding:3px 5px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#fff;">${getMoveName(slotData.m2)}</div>
-                             <div style="background:rgba(0,0,0,0.3); padding:3px 5px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#fff;">${getMoveName(slotData.m3)}</div>
-                             <div style="background:rgba(0,0,0,0.3); padding:3px 5px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#fff;">${getMoveName(slotData.m4)}</div>
+                    <div style="margin-top: 4px; padding-top:4px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8rem; text-align:left;">
+                         <div style="display:flex; justify-content:space-between; margin-bottom:1px; font-size:0.7rem;">
+                            <span style="color:var(--text-muted);">特性: <span style="color:#fff; font-weight:bold;">${slotData.ability || '-'}</span></span>
+                         </div>
+                         <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.7rem;">
+                            <span style="color:var(--text-muted);">持物: <span style="color:#f0d050; font-weight:bold;">${slotData.item && slotData.item !== '1.0' && slotData.item !== 'なし' ? slotData.item : '-'}</span></span>
+                         </div>
+                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;">
+                             ${getMoveBadge(slotData.m1)}
+                             ${getMoveBadge(slotData.m2)}
+                             ${getMoveBadge(slotData.m3)}
+                             ${getMoveBadge(slotData.m4)}
                          </div>
                     </div>
-                    <div style="display:flex; gap: 0.2rem; margin-top: 0.3rem; width:100%;">
-                        <button class="team-action-btn" data-action="set-from-team-atk" data-index="${i}" title="攻撃側に設定" style="flex:1; padding:4px 2px; font-size:0.8rem; background:rgba(226, 75, 75, 0.5); border:1px solid #e24b4b; border-radius:3px; color:white; cursor:pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(226,75,75,0.9)';" onmouseout="this.style.background='rgba(226,75,75,0.5)';">⚔️</button>
-                        <button class="team-action-btn" data-action="set-from-team-def" data-index="${i}" title="防御側に設定" style="flex:1; padding:4px 2px; font-size:0.8rem; background:rgba(64, 104, 224, 0.5); border:1px solid #4068e0; border-radius:3px; color:white; cursor:pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(64,104,224,0.9)';" onmouseout="this.style.background='rgba(64,104,224,0.5)';">🛡️</button>
-                        <button class="team-action-btn" onclick="openTeamEditor(${i})" title="ステータス設定" style="flex:1; padding:4px 2px; font-size:0.8rem; background:rgba(34, 193, 195, 0.5); border:1px solid #22c1c3; border-radius:3px; color:white; cursor:pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(34,193,195,0.9)';" onmouseout="this.style.background='rgba(34,193,195,0.5)';">⚙️設定</button>
+                    <div style="display:flex; gap: 0.2rem; margin-top: 0.4rem; width:100%;">
+                        <button class="team-action-btn" data-action="set-from-team-atk" data-index="${i}" title="攻撃側に設定" style="flex:1; height:28px; background:rgba(226,75,75,0.2); border:1px solid rgba(226,75,75,0.4); border-radius:4px; color:#ff6b6b; cursor:pointer; font-size:0.8rem;">⚔️</button>
+                        <button class="team-action-btn" data-action="set-from-team-def" data-index="${i}" title="防御側に設定" style="flex:1; height:28px; background:rgba(64,104,224,0.2); border:1px solid rgba(64,104,224,0.4); border-radius:4px; color:#4dabf7; cursor:pointer; font-size:0.8rem;">🛡️</button>
+                        <button class="team-action-btn" onclick="openTeamEditor(${i})" title="ステータス設定" style="flex:1; height:28px; background:rgba(0,210,255,0.15); border:1px solid var(--accent-primary); border-radius:4px; color:var(--accent-primary); cursor:pointer; font-size:0.7rem; font-weight:bold;">⚙️設定</button>
                     </div>
                 `;
             } else {
@@ -721,34 +806,158 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Populate Move Select dynamically based on attacker
+    let attackerSourceSlot = null;
+    let defenderSourceSlot = null;
+
+    // Populate Move Selector dynamically based on attacker
     const populateMoves = () => {
         const attackerId = currentAttackerId;
         const attacker = POKEMON_DATA.find(p => p.id == attackerId);
-        moveSelect.innerHTML = '';
+        const trigger = document.getElementById('move-picker-trigger');
+        const nameSpan = document.getElementById('selected-move-name');
+
         if (attacker) {
-            const movesProp = window.getMovesForPokemon(attacker.name);
-            if (movesProp) {
-                movesProp.forEach(mid => {
-                const move = MOVES_DICT[mid];
-                if (move && move.category !== '変化' && move.power !== '-') {
-                    const fullType = tMapGlobal[move.type] || move.type;
-                    const powerText = move.name === 'イカサマ' ? '' : ` (威力${move.power})`;
-                    const option = new Option(`${move.name}${powerText}`, mid);
-                    option.style.color = TYPE_COLOR[fullType] || 'white';
-                    option.style.fontWeight = 'bold';
-                    moveSelect.add(option);
-                }
-                });
+            // Restore saved move or pick the first available damage move
+            let moveId = trigger.dataset.val;
+            if (!moveId && savedCalcState.moveId) {
+                moveId = savedCalcState.moveId;
             }
-            if (savedCalcState.moveId) {
-                // Try to set it to saved move, if it exists
-                moveSelect.value = savedCalcState.moveId;
+
+            if (moveId && MOVES_DICT[moveId]) {
+                trigger.dataset.val = moveId;
+                nameSpan.innerText = MOVES_DICT[moveId].name + (MOVES_DICT[moveId].power !== '-' ? ` (威力${MOVES_DICT[moveId].power})` : '');
+            } else {
+                trigger.dataset.val = "";
+                nameSpan.innerText = "技を選択してください";
             }
         }
         calculateDamage();
     };
-    setupAutocomplete('attacker-input', 'attacker-suggestions', (id) => { currentAttackerId = id; populateMoves(); });
-    setupAutocomplete('defender-input', 'defender-suggestions', (id) => { currentDefenderId = id; calculateDamage(); });
+
+    const openCalcMovePicker = () => {
+        const attacker = POKEMON_DATA.find(p => p.id == currentAttackerId);
+        if (!attacker) return;
+
+        let movesProp = window.getMovesForPokemon(attacker.name) || [];
+        
+        // Filter registered moves if source slot is set
+        if (attackerSourceSlot !== null && currentTeam[attackerSourceSlot]) {
+            const s = currentTeam[attackerSourceSlot];
+            const registeredNames = [s.m1, s.m2, s.m3, s.m4].filter(x => x && x !== 'なし');
+            if (registeredNames.length > 0) {
+                movesProp = movesProp.filter(mid => registeredNames.includes(MOVES_DICT[mid]?.name || mid));
+            }
+        }
+
+        const groups = {};
+        movesProp.forEach(mid => {
+            const move = MOVES_DICT[mid];
+            if (move && move.category !== '変化' && move.power !== '-') {
+                const type = tMapGlobal[move.type] || move.type;
+                if (!groups[type]) groups[type] = [];
+                groups[type].push(mid);
+            }
+        });
+
+        const sortedTypes = Object.keys(groups).sort((a,b) => {
+            const aIsP = attacker.types.includes(a);
+            const bIsP = attacker.types.includes(b);
+            if(aIsP && !bIsP) return -1;
+            if(!aIsP && bIsP) return 1;
+            return a.localeCompare(b);
+        });
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; display:flex; align-items:center; justify-content:center; padding:1rem; backdrop-filter:blur(5px);";
+        
+        const modal = document.createElement('div');
+        modal.className = "card";
+        modal.style.cssText = "width:100%; max-width:450px; max-height:85vh; display:flex; flex-direction:column; padding:0; border:1px solid var(--accent-primary);";
+        
+        const header = document.createElement('div');
+        header.style.cssText = "padding:1rem; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center;";
+        header.innerHTML = `<h3 style="margin:0;">技の選択 (${attacker.name})</h3>`;
+        const closeBtn = document.createElement('button');
+        closeBtn.innerText = "✕";
+        closeBtn.style.cssText = "background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;";
+        closeBtn.onclick = () => overlay.remove();
+        header.appendChild(closeBtn);
+        
+        const list = document.createElement('div');
+        list.style.cssText = "flex:1; overflow-y:auto; padding:0;";
+        
+        if (sortedTypes.length === 0) {
+            list.innerHTML = `<div style="padding:2rem; text-align:center; color:var(--text-muted);">使用可能な攻撃技がありません。</div>`;
+        } else {
+            sortedTypes.forEach(type => {
+                const isStabGroup = attacker.types.includes(type);
+                const typeHeader = document.createElement('div');
+                typeHeader.style.cssText = "padding:0.5rem 0.8rem; background:rgba(255,255,255,0.02); border-bottom:1px solid var(--glass-border); display:flex; align-items:center; gap:0.6rem;";
+                typeHeader.innerHTML = `
+                    <span class="type-badge ${type}" style="font-size: 0.7rem; border:1px solid rgba(255,255,255,0.2); border-radius:20px; padding:2px 10px;">${type}</span>
+                    ${isStabGroup ? '<span style="font-size:0.65rem; background:rgba(255,215,0,0.15); color:#ffd700; border:1px solid #ffd700; padding:1px 6px; border-radius:10px; font-weight:bold;">タイプ一致 Bonus</span>' : ''}
+                `;
+                list.appendChild(typeHeader);
+
+                groups[type].sort((a,b) => (MOVES_DICT[b].power || 0) - (MOVES_DICT[a].power || 0)).forEach(mid => {
+                    const move = MOVES_DICT[mid];
+                    const item = document.createElement('div');
+                    const catBg = move.category === '物理' ? '#e24b4b' : (move.category === '特殊' ? '#4068e0' : '#8899a6');
+                    
+                    item.style.cssText = "padding:0.8rem 1rem; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center; transition:background 0.2s;";
+                    item.onmouseover = () => item.style.background = "rgba(255,255,255,0.05)";
+                    item.onmouseout = () => item.style.background = "transparent";
+                    
+                    item.innerHTML = `
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="font-weight:bold; color:white;">${move.name}</span>
+                            <span style="font-size:0.75rem; color:var(--text-muted);">${move.desc || ''}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:0.8rem;">
+                            <span style="background:${catBg}; font-size:0.7rem; padding:2px 6px; border-radius:4px; font-weight:bold;">${move.category}</span>
+                            <div style="text-align:right; min-width:60px;">
+                                <div style="font-size:0.85rem; font-weight:bold; color:white;">威力 ${move.power}</div>
+                                <div style="font-size:0.7rem; color:var(--text-muted);">命中 ${move.acc}</div>
+                            </div>
+                        </div>
+                    `;
+                    item.onclick = () => {
+                        const trigger = document.getElementById('move-picker-trigger');
+                        trigger.dataset.val = mid;
+                        document.getElementById('selected-move-name').innerText = move.name + (move.power !== '-' ? ` (威力${move.power})` : '');
+                        overlay.remove();
+                        calculateDamage();
+                    };
+                    list.appendChild(item);
+                });
+            });
+        }
+        
+        modal.appendChild(header);
+        modal.appendChild(list);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        overlay.onclick = (e) => { if(e.target === overlay) overlay.remove(); };
+    };
+
+    document.getElementById('move-picker-trigger')?.addEventListener('click', openCalcMovePicker);
+
+    const handleAttackerChange = (id) => {
+        currentAttackerId = id;
+        attackerSourceSlot = null; // Reset if manually selected
+        const trigger = document.getElementById('move-picker-trigger');
+        if (trigger) trigger.dataset.val = ""; // Reset move when attacker changes
+        populateMoves();
+    };
+    const handleDefenderChange = (id) => {
+        currentDefenderId = id;
+        defenderSourceSlot = null; // Reset if manually selected
+        calculateDamage();
+    };
+
+    setupAutocomplete('attacker-input', 'attacker-suggestions', handleAttackerChange);
+    setupAutocomplete('defender-input', 'defender-suggestions', handleDefenderChange);
     
     // Initial population for first load
     setTimeout(populateMoves, 100);
@@ -761,6 +970,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             tab.classList.add('active');
             document.getElementById(tab.dataset.tab).classList.add('active');
+            
+            // Refresh team displays if switching to builder
+            if (tab.dataset.tab === 'builder') window.renderTeamBuilder();
         });
     });
 
@@ -768,7 +980,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const calculateDamage = () => {
         const attackerId = currentAttackerId;
         const defenderId = currentDefenderId;
-        const moveId = moveSelect.value;
+        const moveId = document.getElementById('move-picker-trigger').dataset.val;
         
         const setupMegaButton = (btnId, inputId, currentId, setCurrentIdCb) => {
             const btn = document.getElementById(btnId);
@@ -1475,6 +1687,10 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDatabase(e.target.value);
     });
 
+    document.getElementById('close-all-cards-btn')?.addEventListener('click', () => {
+        document.querySelectorAll('.floating-tracker-card').forEach(c => c.remove());
+    });
+
     renderDatabase();
 
     // Initial calculation and Team display
@@ -1835,37 +2051,64 @@ window.showModal = (id, opts) => {
     const tbody = card.querySelector('.card-moves-tbody');
     const myMoves = (typeof window.getMovesForPokemon === 'function' && window.getMovesForPokemon(p.name)) ? [...window.getMovesForPokemon(p.name)] : [];
     
-    const renderCardMoves = (filterCat) => {
-        let mappedMoves = myMoves.map(m => MOVES_DICT[m]).filter(x => x);
-        if (filterCat !== 'all') mappedMoves = mappedMoves.filter(x => x.category === filterCat);
-        
-        mappedMoves.sort((mvA, mvB) => {
-            const w = {'物理': 1, '特殊': 2, '変化': 3};
-            const catA = w[mvA.category] || 4; const catB = w[mvB.category] || 4;
-            if(catA !== catB) return catA - catB;
-            return (mvA.name || '').localeCompare(mvB.name || '');
-        });
-        
-        tbody.innerHTML = mappedMoves.length > 0 ? mappedMoves.map(mv => {
-            const tMap = {'ノ':'ノーマル','炎':'ほのお','水':'みず','草':'くさ','電':'でんき','氷':'こおり','格':'かくとう','毒':'どく','地':'じめん','飛':'ひこう','エ':'エスパー','虫':'むし','岩':'いわ','ゴ':'ゴースト','ド':'ドラゴン','悪':'あく','鋼':'はがね','妖':'フェアリー'};
-            const fullType = tMap[mv.type] || mv.type;
-            let catBg = mv.category === '物理' ? '#e24b4b' : (mv.category === '特殊' ? '#4068e0' : '#8899a6');
-            let catText = mv.category;
-            return `
-                <tr style="border-bottom: 1px solid var(--glass-border); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'" title="${mv.desc || '説明なし'}">
-                    <td style="padding: 0.5rem; text-align: left; font-weight: bold; color: var(--text-main); font-size: 0.9rem; line-height:1.2;">
-                        ${mv.name}
-                        <div style="font-size:0.7rem; color:#8899a6; margin-top:2px; font-weight:normal;">${mv.desc || ''}</div>
-                    </td>
-                    <td style="padding: 0.5rem;"><span class="type-badge ${fullType}" style="font-size: 0.7rem; padding: 2px 5px; display: inline-block;">${fullType}</span></td>
-                    <td style="padding: 0.5rem; font-size: 0.9rem; color: var(--text-muted); font-weight: bold; white-space: nowrap;">
-                        <span style="color:${catBg}; font-size:0.75rem; margin-right: 4px; border: 1px solid ${catBg}; padding: 1px 4px; border-radius: 4px;">${catText}</span>
-                        ${mv.power||'-'}/${mv.acc||'-'}/${mv.pp}
-                    </td>
-                </tr>
-            `;
-        }).join('') : '<tr><td colspan="3" style="padding: 1rem;">該当する技がありません</td></tr>';
-    };
+        const renderCardMoves = (filterCat) => {
+            let mappedMoves = myMoves.map(m => MOVES_DICT[m]).filter(x => x);
+            if (filterCat !== 'all') mappedMoves = mappedMoves.filter(x => x.category === filterCat);
+            
+            // Group by type
+            const groups = {};
+            mappedMoves.forEach(mv => {
+                const type = tMapGlobal[mv.type] || mv.type;
+                if (!groups[type]) groups[type] = [];
+                groups[type].push(mv);
+            });
+
+            // Sort move groups
+            const sortedTypes = Object.keys(groups).sort((a,b) => {
+                 // Current Pokemon types first
+                 const aIsP = p.types.includes(a);
+                 const bIsP = p.types.includes(b);
+                 if(aIsP && !bIsP) return -1;
+                 if(!aIsP && bIsP) return 1;
+                 return a.localeCompare(b);
+             });
+            
+            let html = '';
+            sortedTypes.forEach(type => {
+                const isStabGroup = p.types.includes(type);
+                html += `
+                    <tr style="background: rgba(255,255,255,0.02);">
+                        <td colspan="3" style="padding: 0.5rem 0.8rem; text-align: left; border-bottom: 2px solid var(--glass-border);">
+                            <div style="display:flex; align-items:center; gap:0.6rem;">
+                                <span class="type-badge ${type}" style="font-size: 0.75rem; border:1px solid rgba(255,255,255,0.2); border-radius:20px; padding:2px 10px;">${type}</span>
+                                ${isStabGroup ? '<span style="font-size:0.65rem; background:rgba(255,215,0,0.15); color:#ffd700; border:1px solid #ffd700; padding:1px 6px; border-radius:10px; font-weight:bold;">タイプ一致 Bonus</span>' : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                groups[type].sort((a,b) => (b.power || 0) - (a.power || 0)).forEach(mv => {
+                    let catBg = mv.category === '物理' ? '#e24b4b' : (mv.category === '特殊' ? '#4068e0' : '#8899a6');
+                    html += `
+                        <tr style="border-bottom: 1px solid var(--glass-border); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 0.7rem 0.8rem; text-align: left; vertical-align: top;">
+                                <div style="font-weight: bold; color: white; font-size: 0.95rem; margin-bottom:2px;">${mv.name}</div>
+                                <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.4;">${mv.desc || ''}</div>
+                            </td>
+                            <td style="padding: 0.7rem 0.8rem; text-align: right; vertical-align: top; white-space: nowrap;">
+                                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                                    <span style="color:${catBg}; font-size:0.7rem; border: 1px solid ${catBg}; padding: 1px 6px; border-radius: 4px; font-weight:bold;">${mv.category}</span>
+                                    <div style="font-size:0.85rem; color:white; font-family:monospace; font-weight:bold;">
+                                        ${mv.power||'-'}/${mv.acc||'-'}/${mv.pp}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            });
+            
+            tbody.innerHTML = html || '<tr><td colspan="3" style="padding: 2rem; color:var(--text-muted);">該当する技がありません</td></tr>';
+        };
     
     renderCardMoves('all');
     
@@ -1933,7 +2176,7 @@ document.getElementById('builder').addEventListener('click', (e) => {
     const clearTeamBtn = e.target.closest('#clear-team-btn');
     if (clearTeamBtn) {
         if(confirm("チーム編成を全てクリアしますか？")) {
-            currentTeam = [null,null,null,null,null,null];
+            currentTeam = new Array(30).fill(null);
             window.saveTeam();
             window.renderTeamBuilder();
         }
@@ -1952,13 +2195,14 @@ document.getElementById('builder').addEventListener('click', (e) => {
     const setAtkBtn = e.target.closest('[data-action="set-from-team-atk"]');
     if (setAtkBtn) {
         e.stopPropagation();
-        const tbData = currentTeam[parseInt(setAtkBtn.dataset.index)];
+        const slotIdx = parseInt(setAtkBtn.dataset.index);
+        const tbData = currentTeam[slotIdx];
         if (tbData) {
             const p = POKEMON_DATA.find(poke => String(poke.id) === String(tbData.id));
             if (p) {
                 currentAttackerId = p.id;
+                attackerSourceSlot = slotIdx; // Record that it came from team builder
                 document.getElementById('attacker-input').value = p.name;
-                document.getElementById('hp-ap').value = tbData.hp;
                 document.getElementById('atk-ap').value = tbData.atk;
                 document.getElementById('atk-nature').value = tbData.nature;
                 if(tbData.ability){
@@ -1971,8 +2215,7 @@ document.getElementById('builder').addEventListener('click', (e) => {
                        sel.value = tbData.ability;
                     }
                 }
-                document.getElementById('atk-item').value = tbData.item || '1.0';
-                // Currently only simple sets are mapped (UI expansion planned)
+                document.getElementById('atk-item').value = tbData.item || 'なし';
                 if (typeof populateMoves === 'function') populateMoves();
                 const calcTab = document.querySelector('.tab-btn[data-tab="calc"]');
                 if (calcTab) calcTab.click();
@@ -1984,13 +2227,16 @@ document.getElementById('builder').addEventListener('click', (e) => {
     const setDefBtn = e.target.closest('[data-action="set-from-team-def"]');
     if (setDefBtn) {
         e.stopPropagation();
-        const tbData = currentTeam[parseInt(setDefBtn.dataset.index)];
+        const slotIdx = parseInt(setDefBtn.dataset.index);
+        const tbData = currentTeam[slotIdx];
         if (tbData) {
             const p = POKEMON_DATA.find(poke => String(poke.id) === String(tbData.id));
             if (p) {
                 currentDefenderId = p.id;
+                defenderSourceSlot = slotIdx;
                 document.getElementById('defender-input').value = p.name;
-                document.getElementById('def-ap').value = tbData.def; // Defense uses defensive EV usually but mapped as HP mapping in basic structure. HP is actually defAp logic in app! Wait, def-ap is HP AP in legacy? No, def-ap is 防御. HP is hp-ap on attacker side? Defender actually doesn't have an hp-ap slider! It relies solely on `HP` constant for def side currently.
+                document.getElementById('hp-ap').value = tbData.hp || 0;
+                document.getElementById('def-ap').value = tbData.def || 0; 
                 document.getElementById('def-nature').value = tbData.nature;
                 document.getElementById('def-item').value = tbData.item || '1.0';
                 if(tbData.ability){
@@ -2007,6 +2253,43 @@ document.getElementById('builder').addEventListener('click', (e) => {
                 const calcTab = document.querySelector('.tab-btn[data-tab="calc"]');
                 if (calcTab) calcTab.click();
             }
+        }
+        return;
+    }
+
+    // Export Logic
+    const exportBtn = e.target.closest('#export-team-btn');
+    if (exportBtn) {
+        const teamData = currentTeam.filter(s => s !== null);
+        if (teamData.length === 0) return alert("エクスポートするポケモンがいません。");
+        const json = JSON.stringify(teamData);
+        navigator.clipboard.writeText(json).then(() => {
+            alert("チームデータをクリップボードにコピーしました！");
+        }).catch(err => {
+            alert("コピーに失敗しました。手動でコピーしてください: " + json);
+        });
+        return;
+    }
+
+    // Import Logic
+    const importBtn = e.target.closest('#import-team-btn');
+    if (importBtn) {
+        const input = prompt("インポートするチームデータ(JSON)を貼り付けてください:");
+        if (!input) return;
+        try {
+            const data = JSON.parse(input);
+            if (!Array.isArray(data)) throw new Error("不正な形式です。");
+            
+            if (confirm("現在のチームを上書きしてインポートしますか？")) {
+                currentTeam = new Array(30).fill(null);
+                data.forEach((pk, idx) => {
+                    if (idx < 30) currentTeam[idx] = pk;
+                });
+                window.saveTeam();
+                window.renderTeamBuilder();
+            }
+        } catch (e) {
+            alert("インポートに失敗しました。データが正しいか確認してください。");
         }
         return;
     }
