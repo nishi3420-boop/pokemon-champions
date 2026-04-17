@@ -22,8 +22,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Team Builder State and Logic ---
-    let currentTeamArray = JSON.parse(localStorage.getItem('pokemon_champions_team') || '[null,null,null,null,null,null]');
-    // Legacy migration: convert any string IDs to complex objects softly
+    let storageKey = 'pokemon_champions_team';
+    let currentTeamArray = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    
+    // Ensure 30 slots (Expand if less)
+    while (currentTeamArray.length < 30) {
+        currentTeamArray.push(null);
+    }
+    
     let currentTeam = currentTeamArray.map(t => {
         if (!t || t.id === "" || t.id == null || typeof t.id === "undefined") return null;
         if (!POKEMON_DATA.find(x => String(x.id) === String(t.id || t))) return null; // Slot sanitizer explicitly blocking corruption
@@ -429,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('team-grid-container');
         if (!container) return;
         container.innerHTML = '';
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 30; i++) {
             const slotData = currentTeam[i];
             const p = slotData ? POKEMON_DATA.find(x => String(x.id) === String(slotData.id)) : null;
             
