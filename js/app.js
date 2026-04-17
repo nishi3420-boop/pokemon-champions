@@ -631,6 +631,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedCalcState.stealthRock !== undefined && document.getElementById('def-stealth-rock')) {
         document.getElementById('def-stealth-rock').checked = savedCalcState.stealthRock;
     }
+    if (savedCalcState.fieldReflect !== undefined && document.getElementById('field-reflect')) {
+        document.getElementById('field-reflect').checked = savedCalcState.fieldReflect;
+    }
+    if (savedCalcState.fieldLightscreen !== undefined && document.getElementById('field-lightscreen')) {
+        document.getElementById('field-lightscreen').checked = savedCalcState.fieldLightscreen;
+    }
+    if (savedCalcState.atkBurn !== undefined && document.getElementById('atk-burn')) {
+        document.getElementById('atk-burn').checked = savedCalcState.atkBurn;
+    }
     restoreVal('atk-item', 'atkItem');
     restoreVal('def-item', 'defItem');
     restoreVal('field-weather', 'fieldWeather');
@@ -1226,6 +1235,13 @@ document.addEventListener('DOMContentLoaded', () => {
             finalAtk = Math.floor(finalAtk * 2.0);
         } else if (atkAbility === 'はりきり' && move.category === '物理') {
             finalAtk = Math.floor(finalAtk * 1.5);
+        } else if (atkAbility === 'こんじょう' && document.getElementById('atk-burn').checked) {
+            finalAtk = Math.floor(finalAtk * 1.5);
+        }
+        
+        // Burn penalty (0.5x Atk for physical moves)
+        if (document.getElementById('atk-burn').checked && move.category === '物理' && atkAbility !== 'こんじょう') {
+            finalAtk = Math.floor(finalAtk * 0.5);
         }
         
         // Atk Item modification directly affects the final effective attack or power
@@ -1331,6 +1347,9 @@ document.addEventListener('DOMContentLoaded', () => {
             (atkAbility === 'りゅうのあぎと' && moveType === 'ドラゴン') ||
             (atkAbility === 'はがねのせいしん' && moveType === 'はがね')) {
             abilityDmgMod = 1.5;
+        } else if (atkAbility === 'こんじょう' && (document.getElementById('atk-burn').checked)) {
+            // Guts (Burn case handled here, but Atk boost in finalAtk logic)
+            abilityDmgMod = 1.0; 
         } else if (atkAbility === 'すいほう' && moveType === 'みず') {
             abilityDmgMod = 2.0;
         } else if (atkAbility === 'かたいツメ' && move.category === '物理') {
@@ -1338,6 +1357,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (atkAbility === 'ノーマルスキン' || 
                    (baseMoveType === 'ノーマル' && ['フェアリースキン', 'スカイスキン', 'フリーズスキン', 'エレキスキン'].includes(atkAbility))) {
             abilityDmgMod = 1.2;
+        }
+
+        // --- Walls (Reflect / Light Screen) ---
+        let wallMod = 1.0;
+        if (!isCrit) {
+            if (document.getElementById('field-reflect').checked && move.category === '物理') wallMod = 0.5;
+            if (document.getElementById('field-lightscreen').checked && move.category === '特殊') wallMod = 0.5;
         }
 
         if (defAbility === 'たいねつ' && moveType === 'ほのお') {
@@ -1352,9 +1378,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Final modifiers applied sequentially
-        // baseDamage * (0.85~1.0) * STAB * TypeMod * WeatherMod * TerrainMod * OtherMods * Ability Mod
-        const minDamage = Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(baseDamage * 0.85 * stab * typeMod) * weatherMoveMod) * terrainMoveMod) * abilityDmgMod) * damageReductionMod);
-        const maxDamage = Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(baseDamage * 1.0 * stab * typeMod) * weatherMoveMod) * terrainMoveMod) * abilityDmgMod) * damageReductionMod);
+        // baseDamage * (0.85~1.0) * STAB * TypeMod * WeatherMod * TerrainMod * OtherMods * Ability Mod * WallMod
+        const minDamage = Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(baseDamage * 0.85 * stab * typeMod) * weatherMoveMod) * terrainMoveMod) * abilityDmgMod) * damageReductionMod) * wallMod);
+        const maxDamage = Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(Math.floor(baseDamage * 1.0 * stab * typeMod) * weatherMoveMod) * terrainMoveMod) * abilityDmgMod) * damageReductionMod) * wallMod);
 
         const minPercent = ((minDamage / hpReal) * 100).toFixed(1);
         const maxPercent = ((maxDamage / hpReal) * 100).toFixed(1);
@@ -1472,6 +1498,9 @@ document.addEventListener('DOMContentLoaded', () => {
             defItem: document.getElementById('def-item').value,
             fieldWeather: document.getElementById('field-weather').value,
             fieldTerrain: document.getElementById('field-terrain').value,
+            fieldReflect: document.getElementById('field-reflect').checked,
+            fieldLightscreen: document.getElementById('field-lightscreen').checked,
+            atkBurn: document.getElementById('atk-burn').checked,
             stealthRock: document.getElementById('def-stealth-rock').checked,
             defSpikes: document.getElementById('def-spikes').value,
             defStatus: document.getElementById('def-status').value,
@@ -1501,10 +1530,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Listeners for inputs
     const inputs = [
         'move-select', 
-        'atk-ap', 'atk-nature', 'atk-rank', 'atk-crit', 'atk-item', 'atk-ability',
+        'atk-ap', 'atk-nature', 'atk-rank', 'atk-crit', 'atk-burn', 'atk-item', 'atk-ability',
         'hp-ap', 'def-ap', 'def-nature', 'def-rank', 'def-item', 'def-ability',
         'def-atk-ap', 'def-atk-nature', 'def-atk-rank',
-        'field-weather', 'field-terrain', 'def-stealth-rock', 'def-spikes', 'def-status', 'def-other-dmg'
+        'field-weather', 'field-terrain', 'field-reflect', 'field-lightscreen',
+        'def-stealth-rock', 'def-spikes', 'def-status', 'def-other-dmg'
     ];
     inputs.forEach(id => {
         const el = document.getElementById(id);
