@@ -1,4 +1,4 @@
-const CACHE_NAME = 'champions-deck-v2';
+const CACHE_NAME = 'champions-deck-v3';
 const ASSETS = [
   './',
   './index.html',

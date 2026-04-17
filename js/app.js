@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const openMovePicker = (targetId) => {
             const trigger = document.getElementById(targetId);
             const mList = window.getMovesForPokemon(p.name) || [];
-            const mappedMoves = mList.map(mid => MOVES_DICT[mid]).filter(x => x);
+            const mappedMoves = mList.map(mid => MOVES_DICT[String(mid)]).filter(x => x);
 
             const overlay = document.createElement('div');
             overlay.style.cssText = "position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:100000; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(8px);";
@@ -124,7 +124,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Grouping by type
                 const groups = {};
                 filtered.forEach(mv => {
-                    const type = tMapGlobal[mv.type] || mv.type;
+                    if (!mv) return;
+                    const type = tMapGlobal[mv.type] || mv.type || 'その他';
                     if (!groups[type]) groups[type] = [];
                     groups[type].push(mv);
                 });
@@ -147,7 +148,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     list.appendChild(typeHeader);
 
-                    groups[type].sort((a,b) => (b.power || 0) - (a.power || 0)).forEach(mv => {
+                    groups[type].sort((a,b) => {
+                        const getP = (p) => (!p || p === '-') ? 0 : parseInt(p);
+                        return getP(b.power) - getP(a.power);
+                    }).forEach(mv => {
                         const row = document.createElement('div');
                         const fullType = tMapGlobal[mv.type] || mv.type;
                         let catBg = mv.category === '物理' ? '#e24b4b' : (mv.category === '特殊' ? '#4068e0' : '#8899a6');
@@ -363,21 +367,43 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             teMegaBtn.title = `次は ${targetForm.name} に変更します`;
             teMegaBtn.onclick = () => {
-                currentTeam[index].id = targetForm.id;
-                currentTeam[index].hp = parseInt(document.getElementById('te-hp').value) || 0;
-                currentTeam[index].atk = parseInt(document.getElementById('te-atk').value) || 0;
-                currentTeam[index].def = parseInt(document.getElementById('te-def').value) || 0;
-                currentTeam[index].spa = parseInt(document.getElementById('te-spa').value) || 0;
-                currentTeam[index].spd = parseInt(document.getElementById('te-spd').value) || 0;
-                currentTeam[index].spe = parseInt(document.getElementById('te-spe').value) || 0;
-                currentTeam[index].ability = document.getElementById('te-ability') ? document.getElementById('te-ability').value : '';
-                currentTeam[index].nature = document.getElementById('te-nature').value;
-                currentTeam[index].item = document.getElementById('te-item').value;
-                currentTeam[index].m1 = document.getElementById('te-m1').value;
-                currentTeam[index].m2 = document.getElementById('te-m2').value;
-                currentTeam[index].m3 = document.getElementById('te-m3').value;
-                currentTeam[index].m4 = document.getElementById('te-m4').value;
-                openTeamEditor(index);
+                const currentIdx = index;
+                const slot = currentTeam[currentIdx];
+                const currentSpecies = POKEMON_DATA.find(x => String(x.id) === String(slot.id));
+                const currentAbility = document.getElementById('te-ability') ? document.getElementById('te-ability').value : '';
+                
+                // If moving from a form that HAS the ability to one that MIGHT NOT, 
+                // but we want to remember it for when we come back.
+                const isCurrentMega = currentSpecies && (currentSpecies.name.includes('メガ') || currentSpecies.name.includes('ゲンシ'));
+                if (!isCurrentMega) {
+                    slot.baseAbility = currentAbility;
+                }
+
+                slot.id = targetForm.id;
+                slot.hp = parseInt(document.getElementById('te-hp').value) || 0;
+                slot.atk = parseInt(document.getElementById('te-atk').value) || 0;
+                slot.def = parseInt(document.getElementById('te-def').value) || 0;
+                slot.spa = parseInt(document.getElementById('te-spa').value) || 0;
+                slot.spd = parseInt(document.getElementById('te-spd').value) || 0;
+                slot.spe = parseInt(document.getElementById('te-spe').value) || 0;
+                
+                // Handle ability selection for next form
+                const isTargetMega = targetForm.name.includes('メガ') || targetForm.name.includes('ゲンシ');
+                if (isTargetMega) {
+                    slot.ability = (targetForm.abilities && targetForm.abilities.length > 0) ? targetForm.abilities[0] : '';
+                } else if (slot.baseAbility && targetForm.abilities.includes(slot.baseAbility)) {
+                    slot.ability = slot.baseAbility;
+                } else {
+                    slot.ability = document.getElementById('te-ability') ? document.getElementById('te-ability').value : '';
+                }
+
+                slot.nature = document.getElementById('te-nature').value;
+                slot.item = document.getElementById('te-item').value;
+                slot.m1 = document.getElementById('te-m1').dataset.val || '';
+                slot.m2 = document.getElementById('te-m2').dataset.val || '';
+                slot.m3 = document.getElementById('te-m3').dataset.val || '';
+                slot.m4 = document.getElementById('te-m4').dataset.val || '';
+                openTeamEditor(currentIdx);
             };
         }
         
@@ -835,15 +861,39 @@ document.addEventListener('DOMContentLoaded', () => {
         const nameSpan = document.getElementById('selected-move-name');
 
         if (attacker) {
-            // Restore saved move or pick the first available damage move
             let moveId = trigger.dataset.val;
-            if (!moveId && savedCalcState.moveId) {
-                moveId = savedCalcState.moveId;
+            
+            // Hide status moves ALWAYS
+            const isStatus = moveId && MOVES_DICT[moveId] && MOVES_DICT[moveId].category === '変化';
+
+            if (!moveId || !MOVES_DICT[moveId] || isStatus) {
+                let potentialMids = [];
+                if (attackerSourceSlot !== null && currentTeam[attackerSourceSlot]) {
+                    const s = currentTeam[attackerSourceSlot];
+                    const registeredKeys = [s.m1, s.m2, s.m3, s.m4].filter(x => x && x !== 'なし' && x !== '（なし）');
+                    registeredKeys.forEach(raw => {
+                        const key = String(raw).trim();
+                        let mid = "";
+                        if (MOVES_DICT[key]) {
+                            mid = key;
+                        } else {
+                            const ent = Object.entries(MOVES_DICT).find(([id, m]) => m.name === key);
+                            if (ent) mid = ent[0];
+                        }
+                        if (mid && MOVES_DICT[mid].category !== '変化') potentialMids.push(mid);
+                    });
+                    moveId = potentialMids[0] || "";
+                } else {
+                    potentialMids = window.getMovesForPokemon(attacker.name) || [];
+                    const firstDmg = potentialMids.find(mid => MOVES_DICT[mid] && MOVES_DICT[mid].category !== '変化');
+                    moveId = firstDmg || "";
+                }
             }
 
             if (moveId && MOVES_DICT[moveId]) {
+                const mv = MOVES_DICT[moveId];
                 trigger.dataset.val = moveId;
-                nameSpan.innerText = MOVES_DICT[moveId].name + (MOVES_DICT[moveId].power !== '-' ? ` (威力${MOVES_DICT[moveId].power})` : '');
+                nameSpan.innerText = mv.name + (mv.power !== '-' ? ` (威力${mv.power})` : '');
             } else {
                 trigger.dataset.val = "";
                 nameSpan.innerText = "技を選択してください";
@@ -858,24 +908,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let movesProp = window.getMovesForPokemon(attacker.name) || [];
         
-        // Filter registered moves if source slot is set
+        // If coming from team builder, ensure registered moves are prioritized and included
+        let registeredMids = [];
         if (attackerSourceSlot !== null && currentTeam[attackerSourceSlot]) {
             const s = currentTeam[attackerSourceSlot];
-            const registeredNames = [s.m1, s.m2, s.m3, s.m4].filter(x => x && x !== 'なし');
-            if (registeredNames.length > 0) {
-                movesProp = movesProp.filter(mid => registeredNames.includes(MOVES_DICT[mid]?.name || mid));
-            }
+            const registeredKeys = [s.m1, s.m2, s.m3, s.m4].filter(x => x && x !== 'なし' && x !== '（なし）');
+            
+            registeredKeys.forEach(raw => {
+                const key = String(raw).trim();
+                if (MOVES_DICT[key]) {
+                    registeredMids.push(key);
+                } else {
+                    const foundEntry = Object.entries(MOVES_DICT).find(([id, m]) => m.name === key);
+                    if (foundEntry) registeredMids.push(String(foundEntry[0]));
+                }
+            });
+        }
+
+        // If coming from team builder, limit to registered moves only
+        let allMoveIds;
+        if (attackerSourceSlot !== null && registeredMids.length > 0) {
+            allMoveIds = Array.from(new Set(registeredMids));
+        } else {
+            allMoveIds = Array.from(new Set(movesProp));
         }
 
         const groups = {};
-        movesProp.forEach(mid => {
+        allMoveIds.forEach(rawMid => {
+            const mid = String(rawMid);
             const move = MOVES_DICT[mid];
-            if (move && move.category !== '変化' && move.power !== '-') {
+            if (!move) return;
+
+            // Check if it's in the registered slot
+            const isRegistered = registeredMids.includes(mid);
+
+            // User requested to completely hide status moves again
+            if (move.category === '変化') return;
+
+            // Show if it's a damaging move OR it's specifically registered in the team slot
+            if (isRegistered || (move.power !== '-')) {
                 const type = tMapGlobal[move.type] || move.type;
                 if (!groups[type]) groups[type] = [];
-                groups[type].push(mid);
+                // Push to start of group if registered to make it easier to find
+                if (isRegistered) {
+                    groups[type].unshift(mid);
+                } else {
+                    groups[type].push(mid);
+                }
             }
         });
+
+        // Final de-duplicate within groups (just in case)
+        for (const type in groups) {
+            groups[type] = Array.from(new Set(groups[type]));
+        }
 
         const sortedTypes = Object.keys(groups).sort((a,b) => {
             const aIsP = attacker.types.includes(a);
@@ -917,7 +1003,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 list.appendChild(typeHeader);
 
-                groups[type].sort((a,b) => (MOVES_DICT[b].power || 0) - (MOVES_DICT[a].power || 0)).forEach(mid => {
+                groups[type].sort((a,b) => {
+                    const getP = (p) => (!p || p === '-') ? 0 : parseInt(p);
+                    return getP(MOVES_DICT[b].power) - getP(MOVES_DICT[a].power);
+                }).forEach(mid => {
                     const move = MOVES_DICT[mid];
                     const item = document.createElement('div');
                     const catBg = move.category === '物理' ? '#e24b4b' : (move.category === '特殊' ? '#4068e0' : '#8899a6');
@@ -980,17 +1069,44 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial population for first load
     setTimeout(populateMoves, 100);
 
+    // Restore saved move from previous session
+    if (savedCalcState.moveId && MOVES_DICT[savedCalcState.moveId]) {
+        const trigger = document.getElementById('move-picker-trigger');
+        if (trigger) {
+            trigger.dataset.val = savedCalcState.moveId;
+            const mv = MOVES_DICT[savedCalcState.moveId];
+            document.getElementById('selected-move-name').innerText = mv.name + (mv.power !== '-' ? ` (威力${mv.power})` : '');
+        }
+    }
+
+    // Tab Switching Logic
+    window.switchTab = (tabName) => {
+        // Close floating tracker cards
+        document.querySelectorAll('.floating-tracker-card').forEach(c => c.remove());
+        // Close main modal
+        const mainModal = document.getElementById('pokemon-modal');
+        if (mainModal) mainModal.classList.remove('active');
+
+        const allTabs = document.querySelectorAll('.tab-btn');
+        const allPanels = document.querySelectorAll('.panel');
+        const targetTab = Array.from(allTabs).find(t => t.dataset.tab === tabName);
+        if (!targetTab) return;
+        
+        allTabs.forEach(t => t.classList.remove('active'));
+        allPanels.forEach(p => p.classList.remove('active'));
+        
+        targetTab.classList.add('active');
+        const panel = document.getElementById(tabName);
+        if (panel) panel.classList.add('active');
+        
+        window.scrollTo(0, 0); 
+        if (tabName === 'builder') window.renderTeamBuilder();
+    };
+
     // Tab Switching
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            panels.forEach(p => p.classList.remove('active'));
-            
-            tab.classList.add('active');
-            document.getElementById(tab.dataset.tab).classList.add('active');
-            
-            // Refresh team displays if switching to builder
-            if (tab.dataset.tab === 'builder') window.renderTeamBuilder();
+            window.switchTab(tab.dataset.tab);
         });
     });
 
@@ -998,7 +1114,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const calculateDamage = () => {
         const attackerId = currentAttackerId;
         const defenderId = currentDefenderId;
-        const moveId = document.getElementById('move-picker-trigger').dataset.val;
+        const triggerEl = document.getElementById('move-picker-trigger');
+        const moveId = triggerEl ? triggerEl.dataset.val : "";
         
         const setupMegaButton = (btnId, inputId, currentId, setCurrentIdCb) => {
             const btn = document.getElementById(btnId);
@@ -1036,8 +1153,27 @@ document.addEventListener('DOMContentLoaded', () => {
                  
                  btn.title = `次は ${nextForm.name} に変更します`;
                  btn.onclick = () => {
+                     const currentSpecies = POKEMON_DATA.find(x => String(x.id) === String(currentId));
+                     const sel = document.getElementById(inputId === 'attacker-input' ? 'atk-ability' : 'def-ability');
+                     const isCurrentMega = currentSpecies && (currentSpecies.name.includes('メガ') || currentSpecies.name.includes('ゲンシ'));
+                     
+                     if (sel && !isCurrentMega) {
+                         sel.dataset.baseAbility = sel.value;
+                     }
+
                      document.getElementById(inputId).value = nextForm.name;
                      setCurrentIdCb(nextForm.id);
+
+                     // Set target ability if returning to base
+                     const isTargetMega = nextForm.name.includes('メガ') || nextForm.name.includes('ゲンシ');
+                     if (sel) {
+                         if (isTargetMega) {
+                             // Just let populate/calc handles it usually, but we can pre-set
+                         } else if (sel.dataset.baseAbility) {
+                             // Will be handled in the ability population logic below
+                         }
+                     }
+
                      if (btnId === 'atk-mega-btn') populateMoves();
                      else calculateDamage();
                  };
@@ -1052,21 +1188,48 @@ document.addEventListener('DOMContentLoaded', () => {
         const attacker = POKEMON_DATA.find(p => p.id == attackerId);
         const defender = POKEMON_DATA.find(p => p.id == defenderId);
         
-        if (attacker && document.getElementById('atk-ability') && document.getElementById('atk-ability').dataset.lastId !== String(attackerId)) {
+        if (attacker && document.getElementById('atk-ability')) {
             const sel = document.getElementById('atk-ability');
-            sel.innerHTML = '';
-            (attacker.abilities && attacker.abilities.length > 0 ? attacker.abilities : ['（特性なし）']).forEach(a => sel.add(new Option(a, a)));
-            sel.add(new Option('なし', 'なし'));
-            sel.dataset.lastId = String(attackerId);
-            sel.value = (attacker.abilities && attacker.abilities.length > 0) ? attacker.abilities[0] : 'なし';
+            if (sel.dataset.lastId !== String(attackerId)) {
+                const prevValue = sel.value;
+                sel.innerHTML = '';
+                (attacker.abilities && attacker.abilities.length > 0 ? attacker.abilities : ['（特性なし）']).forEach(a => sel.add(new Option(a, a)));
+                sel.add(new Option('なし', 'なし'));
+                sel.dataset.lastId = String(attackerId);
+                
+                // Try to restore previous value
+                const isMega = attacker.name.includes('メガ') || attacker.name.includes('ゲンシ');
+                if (isMega) {
+                    sel.value = (attacker.abilities && attacker.abilities.length > 0) ? attacker.abilities[0] : 'なし';
+                } else if (sel.dataset.baseAbility && Array.from(sel.options).some(opt => opt.value === sel.dataset.baseAbility)) {
+                    sel.value = sel.dataset.baseAbility;
+                } else if (Array.from(sel.options).some(opt => opt.value === prevValue)) {
+                    sel.value = prevValue;
+                } else {
+                    sel.value = (attacker.abilities && attacker.abilities.length > 0) ? attacker.abilities[0] : 'なし';
+                }
+            }
         }
-        if (defender && document.getElementById('def-ability') && document.getElementById('def-ability').dataset.lastId !== String(defenderId)) {
+        if (defender && document.getElementById('def-ability')) {
             const sel = document.getElementById('def-ability');
-            sel.innerHTML = '';
-            (defender.abilities && defender.abilities.length > 0 ? defender.abilities : ['（特性なし）']).forEach(a => sel.add(new Option(a, a)));
-            sel.add(new Option('なし', 'なし'));
-            sel.dataset.lastId = String(defenderId);
-            sel.value = (defender.abilities && defender.abilities.length > 0) ? defender.abilities[0] : 'なし';
+            if (sel.dataset.lastId !== String(defenderId)) {
+                const prevValue = sel.value;
+                sel.innerHTML = '';
+                (defender.abilities && defender.abilities.length > 0 ? defender.abilities : ['（特性なし）']).forEach(a => sel.add(new Option(a, a)));
+                sel.add(new Option('なし', 'なし'));
+                sel.dataset.lastId = String(defenderId);
+                
+                const isMega = defender.name.includes('メガ') || defender.name.includes('ゲンシ');
+                if (isMega) {
+                    sel.value = (defender.abilities && defender.abilities.length > 0) ? defender.abilities[0] : 'なし';
+                } else if (sel.dataset.baseAbility && Array.from(sel.options).some(opt => opt.value === sel.dataset.baseAbility)) {
+                    sel.value = sel.dataset.baseAbility;
+                } else if (Array.from(sel.options).some(opt => opt.value === prevValue)) {
+                    sel.value = prevValue;
+                } else {
+                    sel.value = (defender.abilities && defender.abilities.length > 0) ? defender.abilities[0] : 'なし';
+                }
+            }
         }
 
         const atkAbility = document.getElementById('atk-ability') ? document.getElementById('atk-ability').value : '';
@@ -1095,6 +1258,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const move = MOVES_DICT[moveId];
 
         if (!attacker || !defender || !move) return;
+
+        // --- Dynamic EV/AP loading based on move category (Physical vs Special) ---
+        const atkApInput = document.getElementById('atk-ap');
+        if (atkApInput && attackerSourceSlot !== null && currentTeam[attackerSourceSlot]) {
+            if (atkApInput.dataset.lastCategory !== move.category) {
+                atkApInput.value = move.category === '物理' ? (currentTeam[attackerSourceSlot].atk || 0) : (currentTeam[attackerSourceSlot].spa || 0);
+            }
+        }
+        if (atkApInput) atkApInput.dataset.lastCategory = move.category;
+
+        const defApInput = document.getElementById('def-ap');
+        if (defApInput && defenderSourceSlot !== null && currentTeam[defenderSourceSlot]) {
+            if (defApInput.dataset.lastCategory !== move.category) {
+                defApInput.value = move.category === '物理' ? (currentTeam[defenderSourceSlot].def || 0) : (currentTeam[defenderSourceSlot].spd || 0);
+            }
+        }
+        if (defApInput) defApInput.dataset.lastCategory = move.category;
         
         // Show rich badges for selected move
         const moveDetails = document.getElementById('move-details-container');
@@ -1497,7 +1677,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const stateToSave = {
             attackerId: currentAttackerId,
             defenderId: currentDefenderId,
-            moveId: moveSelect.value,
+            moveId: triggerEl ? triggerEl.dataset.val : "",
             atkAp: document.getElementById('atk-ap').value,
             atkNature: document.getElementById('atk-nature').value,
             atkRank: document.getElementById('atk-rank').value,
@@ -1529,17 +1709,95 @@ document.addEventListener('DOMContentLoaded', () => {
     const swapBtn = document.getElementById('swap-btn');
     if (swapBtn) {
         swapBtn.addEventListener('click', () => {
+            // 1. Swap IDs and Source Slots
             const tempId = currentAttackerId;
             currentAttackerId = currentDefenderId;
             currentDefenderId = tempId;
             
+            const tempSlot = attackerSourceSlot;
+            attackerSourceSlot = defenderSourceSlot;
+            defenderSourceSlot = tempSlot;
+
+            // 2. Swap Main Inputs
             const attackerIn = document.getElementById('attacker-input');
             const defenderIn = document.getElementById('defender-input');
             const tempName = attackerIn.value;
             attackerIn.value = defenderIn.value;
             defenderIn.value = tempName;
+
+            // 3. Elements to Swap
+            const atkApEl = document.getElementById('atk-ap');
+            const hpApEl = document.getElementById('hp-ap');
+            const defApEl = document.getElementById('def-ap');
+            const defAtkApEl = document.getElementById('def-atk-ap');
+            const atkNatEl = document.getElementById('atk-nature');
+            const defNatEl = document.getElementById('def-nature');
+            const atkItemEl = document.getElementById('atk-item');
+            const defItemEl = document.getElementById('def-item');
             
-            populateMoves(); // This handles recalculation
+            const oldAtkAp = atkApEl.value;
+            const oldDefAp = defApEl.value;
+            const oldAtkNat = atkNatEl.value;
+            const oldDefNat = defNatEl.value;
+            const oldAtkItem = atkItemEl.value;
+            const oldDefItem = defItemEl.value;
+            
+            // 4. Proper Initialization keeping Team Builder intact
+            if (attackerSourceSlot !== null && currentTeam[attackerSourceSlot]) {
+                const tbData = currentTeam[attackerSourceSlot];
+                atkNatEl.value = tbData.nature || '1.0';
+                atkItemEl.value = tbData.item || 'なし';
+            } else {
+                atkApEl.value = oldDefAp;
+                atkNatEl.value = oldDefNat;
+                atkItemEl.value = oldDefItem;
+            }
+            atkApEl.dataset.lastCategory = "";
+
+            if (defenderSourceSlot !== null && currentTeam[defenderSourceSlot]) {
+                const tbData = currentTeam[defenderSourceSlot];
+                hpApEl.value = tbData.hp || 0;
+                defNatEl.value = tbData.nature || '1.0';
+                defItemEl.value = tbData.item || 'なし';
+                if (defAtkApEl) defAtkApEl.value = tbData.atk || 0;
+                defApEl.value = tbData.def || 0;
+            } else {
+                hpApEl.value = "32";
+                defApEl.value = oldAtkAp;
+                defNatEl.value = oldAtkNat;
+                defItemEl.value = oldAtkItem;
+            }
+            defApEl.dataset.lastCategory = "";
+
+            // Special handling for abilities to prevent reset
+            const atkAbEl = document.getElementById('atk-ability');
+            const defAbEl = document.getElementById('def-ability');
+            const tempAtkAbVal = atkAbEl.value;
+            const tempDefAbVal = defAbEl.value;
+
+            // Force rebuild of ability lists immediately before swap population
+            const atkP = POKEMON_DATA.find(p => p.id == currentAttackerId);
+            const defP = POKEMON_DATA.find(p => p.id == currentDefenderId);
+
+            if (atkP && atkAbEl) {
+                atkAbEl.innerHTML = '';
+                atkAbEl.dataset.lastId = String(atkP.id);
+                (atkP.abilities || []).concat(['なし']).forEach(a => atkAbEl.add(new Option(a, a)));
+                atkAbEl.value = tempDefAbVal; 
+                if (!atkAbEl.value && atkP.abilities.length > 0) atkAbEl.value = atkP.abilities[0];
+            }
+            if (defP && defAbEl) {
+                defAbEl.innerHTML = '';
+                defAbEl.dataset.lastId = String(defP.id);
+                (defP.abilities || []).concat(['なし']).forEach(a => defAbEl.add(new Option(a, a)));
+                defAbEl.value = tempAtkAbVal;
+                if (!defAbEl.value && defP.abilities.length > 0) defAbEl.value = defP.abilities[0];
+            }
+
+            const trigger = document.getElementById('move-picker-trigger');
+            if (trigger) trigger.dataset.val = ""; // Reset move for the new attacker
+            
+            populateMoves(); 
         });
     }
 
@@ -1667,6 +1925,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <thead>
                         <tr style="border-bottom: 2px solid var(--accent-primary);">
                             <th style="padding: 12px; cursor: pointer; text-align: left; user-select: none;" onclick="handleSort('id')">名前 ${getSortIndicator('id')}</th>
+                            <th style="padding: 12px; user-select: none;">Calc</th>
                             <th style="padding: 12px; cursor: pointer; user-select: none;" title="HP" onclick="handleSort('hp')">HP ${getSortIndicator('hp')}</th>
                             <th style="padding: 12px; cursor: pointer; user-select: none;" title="攻撃" onclick="handleSort('atk')">攻撃 ${getSortIndicator('atk')}</th>
                             <th style="padding: 12px; cursor: pointer; user-select: none;" title="防御" onclick="handleSort('def')">防御 ${getSortIndicator('def')}</th>
@@ -1688,6 +1947,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <div style="display: flex; gap: 0.25rem; margin-top: 0.2rem;">
                                             ${p.types.map(t => `<span class="type-badge ${t}" style="font-size: 0.6rem; padding: 2px 6px;">${t}</span>`).join('')}
                                         </div>
+                                    </div>
+                                </td>
+                                <td style="padding: 10px;">
+                                    <div style="display: flex; gap: 4px; justify-content: center;">
+                                        <button class="db-quick-set" data-action="set-attacker" data-id="${p.id}" style="padding: 4px 8px; font-size: 0.9rem; background: rgba(226,75,75,0.2); border: 1px solid rgba(226,75,75,0.4); border-radius: 4px; cursor: pointer;" title="攻撃側に設定">⚔️</button>
+                                        <button class="db-quick-set" data-action="set-defender" data-id="${p.id}" style="padding: 4px 8px; font-size: 0.9rem; background: rgba(64,104,224,0.2); border: 1px solid rgba(64,104,224,0.4); border-radius: 4px; cursor: pointer;" title="防御側に設定">🛡️</button>
                                     </div>
                                 </td>
                                 <td style="padding: 10px; font-family: monospace; font-size: 1.1rem; ${currentSortColumn === 'hp' ? 'color: var(--accent-primary); font-weight: bold;' : ''}">${p.stats.hp}</td>
@@ -1716,6 +1981,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (typeof window.toggleFavorite === 'function') {
                     window.toggleFavorite(favBtn.dataset.id, e);
                 }
+                return;
+            }
+            
+            const quickSetBtn = e.target.closest('.db-quick-set');
+            if (quickSetBtn) {
+                e.stopPropagation();
+                const qId = quickSetBtn.dataset.id;
+                const qAction = quickSetBtn.dataset.action;
+                const pObj = POKEMON_DATA.find(x => String(x.id) === String(qId));
+                if (!pObj) return;
+
+                if (qAction === 'set-attacker') {
+                    currentAttackerId = pObj.id;
+                    attackerSourceSlot = null;
+                    document.getElementById('attacker-input').value = pObj.name;
+                    document.getElementById('move-picker-trigger').dataset.val = ""; // Force reset move
+                    if(typeof populateMoves === 'function') populateMoves();
+                } else {
+                    currentDefenderId = pObj.id;
+                    defenderSourceSlot = null;
+                    document.getElementById('defender-input').value = pObj.name;
+                    if(typeof calculateDamage === 'function') calculateDamage();
+                }
+                window.switchTab('calc');
                 return;
             }
             
@@ -2042,21 +2331,26 @@ window.showModal = (id, opts) => {
 
             if (action === 'set-attacker') {
                 currentAttackerId = tgtP.id;
+                attackerSourceSlot = null; // Important: manual set from DB card
                 document.getElementById('attacker-input').value = tgtP.name;
+                document.getElementById('move-picker-trigger').dataset.val = ""; // Force reset move
                 if(typeof populateMoves === 'function') populateMoves();
-                document.querySelector('.tab-btn[data-tab="calc"]').click();
+                window.switchTab('calc');
+                card.remove(); // Close modal after setting
             } else if (action === 'set-defender') {
                 currentDefenderId = tgtP.id;
+                defenderSourceSlot = null; // Important: manual set from DB card
                 document.getElementById('defender-input').value = tgtP.name;
                 if(typeof calculateDamage === 'function') calculateDamage();
-                document.querySelector('.tab-btn[data-tab="calc"]').click();
+                window.switchTab('calc');
+                card.remove(); // Close modal after setting
             } else if (action === 'add-to-team') {
                 const emptyIndex = currentTeam.findIndex(s => s === null);
                 if (emptyIndex !== -1) {
                     currentTeam[emptyIndex] = { id: tgtP.id, hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0, nature: 'まじめ', ability: (tgtP.abilities && tgtP.abilities[0]) ? tgtP.abilities[0] : 'なし', item: '1.0', m1: 'なし', m2: 'なし', m3: 'なし', m4: 'なし' };
                     if(typeof window.saveTeam === 'function') window.saveTeam();
                     if(typeof window.renderTeamBuilder === 'function') window.renderTeamBuilder();
-                    document.querySelector('.tab-btn[data-tab="builder"]').click();
+                    window.switchTab('builder');
                 } else {
                     alert("チームが満杯です！");
                 }
@@ -2133,7 +2427,10 @@ window.showModal = (id, opts) => {
                         </td>
                     </tr>
                 `;
-                groups[type].sort((a,b) => (b.power || 0) - (a.power || 0)).forEach(mv => {
+                groups[type].sort((a,b) => {
+                    const getP = (p) => (!p || p === '-') ? 0 : parseInt(p);
+                    return getP(b.power) - getP(a.power);
+                }).forEach(mv => {
                     let catBg = mv.category === '物理' ? '#e24b4b' : (mv.category === '特殊' ? '#4068e0' : '#8899a6');
                     html += `
                         <tr style="border-bottom: 1px solid var(--glass-border); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
@@ -2248,24 +2545,33 @@ document.getElementById('builder').addEventListener('click', (e) => {
             const p = POKEMON_DATA.find(poke => String(poke.id) === String(tbData.id));
             if (p) {
                 currentAttackerId = p.id;
-                attackerSourceSlot = slotIdx; // Record that it came from team builder
+                attackerSourceSlot = slotIdx;
                 document.getElementById('attacker-input').value = p.name;
-                document.getElementById('atk-ap').value = tbData.atk;
-                document.getElementById('atk-nature').value = tbData.nature;
-                if(tbData.ability){
-                    const sel = document.getElementById('atk-ability');
-                    if(sel) {
-                       sel.innerHTML = '';
-                       sel.dataset.lastId = String(p.id);
-                       (p.abilities && p.abilities.length > 0 ? p.abilities : ['（特性なし）']).forEach(a => sel.add(new Option(a, a)));
-                       sel.add(new Option('なし', 'なし'));
-                       sel.value = tbData.ability;
-                    }
-                }
+                
+                // Find if the first move is special to decide which AP to use
+                const firstMoveName = [tbData.m1, tbData.m2, tbData.m3, tbData.m4].find(m => m && m !== 'なし');
+                const firstMv = Object.values(MOVES_DICT).find(m => m.name === firstMoveName);
+                const isSpecial = firstMv && firstMv.category === '特殊';
+                
+                // Tell calculateDamage to force refresh on next check
+                const atkApEl = document.getElementById('atk-ap');
+                if (atkApEl) atkApEl.dataset.lastCategory = '';
+                
+                document.getElementById('atk-ap').value = isSpecial ? (tbData.spa || 0) : (tbData.atk || 0);
+                document.getElementById('atk-nature').value = tbData.nature || '1.0';
                 document.getElementById('atk-item').value = tbData.item || 'なし';
+
+                const sel = document.getElementById('atk-ability');
+                if(sel) {
+                    sel.innerHTML = '';
+                    sel.dataset.lastId = String(p.id);
+                    (p.abilities || []).concat(['なし']).forEach(a => sel.add(new Option(a, a)));
+                    sel.value = tbData.ability || (p.abilities[0] || 'なし');
+                }
+                
+                document.getElementById('move-picker-trigger').dataset.val = ""; 
                 if (typeof populateMoves === 'function') populateMoves();
-                const calcTab = document.querySelector('.tab-btn[data-tab="calc"]');
-                if (calcTab) calcTab.click();
+                window.switchTab('calc');
             }
         }
         return;
@@ -2283,22 +2589,34 @@ document.getElementById('builder').addEventListener('click', (e) => {
                 defenderSourceSlot = slotIdx;
                 document.getElementById('defender-input').value = p.name;
                 document.getElementById('hp-ap').value = tbData.hp || 0;
-                document.getElementById('def-ap').value = tbData.def || 0; 
-                document.getElementById('def-nature').value = tbData.nature;
+                
+                // Foul play attack stat transfer
+                const defAtkApEl = document.getElementById('def-atk-ap');
+                if (defAtkApEl) defAtkApEl.value = tbData.atk || 0;
+                
+                let currentCat = '物理';
+                const currentMoveId = document.getElementById('move-picker-trigger')?.dataset.val;
+                if (currentMoveId && MOVES_DICT[currentMoveId]) {
+                    currentCat = MOVES_DICT[currentMoveId].category;
+                }
+                const startDefVal = currentCat === '物理' ? (tbData.def || 0) : (tbData.spd || 0);
+                document.getElementById('def-ap').value = startDefVal; 
+                
+                const defApEl = document.getElementById('def-ap');
+                if (defApEl) defApEl.dataset.lastCategory = currentCat;
+
+                document.getElementById('def-nature').value = tbData.nature || '1.0';
                 document.getElementById('def-item').value = tbData.item || '1.0';
-                if(tbData.ability){
-                    const sel = document.getElementById('def-ability');
-                    if(sel) {
-                       sel.innerHTML = '';
-                       sel.dataset.lastId = String(p.id);
-                       (p.abilities && p.abilities.length > 0 ? p.abilities : ['（特性なし）']).forEach(a => sel.add(new Option(a, a)));
-                       sel.add(new Option('なし', 'なし'));
-                       sel.value = tbData.ability;
-                    }
+                
+                const sel = document.getElementById('def-ability');
+                if(sel) {
+                    sel.innerHTML = '';
+                    sel.dataset.lastId = String(p.id);
+                    (p.abilities || []).concat(['なし']).forEach(a => sel.add(new Option(a, a)));
+                    sel.value = tbData.ability || (p.abilities[0] || 'なし');
                 }
                 if (typeof calculateDamage === 'function') calculateDamage();
-                const calcTab = document.querySelector('.tab-btn[data-tab="calc"]');
-                if (calcTab) calcTab.click();
+                window.switchTab('calc');
             }
         }
         return;

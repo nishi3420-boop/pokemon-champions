@@ -1,17 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    // Ensure tab switching works for the new speed tab smoothly
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const targetId = btn.getAttribute('data-tab');
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            btn.classList.add('active');
-            const pnl = document.getElementById(targetId);
-            if(pnl) pnl.classList.add('active');
-        });
-    });
-
+    // Tab switching is now handled by app.js definitively to avoid conflicts.
+    
     // Restore Speed Entities
     let speedEntities = JSON.parse(localStorage.getItem('pokemon_champions_speed_entities') || '[]');
     let idCounter = speedEntities.length > 0 ? Math.max(...speedEntities.map(e => e._id || 0)) + 1 : 1;
