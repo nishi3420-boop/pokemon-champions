@@ -911,6 +911,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const atkNatureVal = document.getElementById('atk-nature').value;
         const atkNature = getNatureMultiplier(atkNatureVal, atkStatKey);
         const atkRank = parseInt(document.getElementById('atk-rank').value);
+        const defRank = parseInt(document.getElementById('def-rank').value);
+        const isCrit = document.getElementById('atk-crit') ? document.getElementById('atk-crit').checked : false;
+        
         
         let atkReal = Math.floor((Math.floor((atkBase * 2 + 31 + (atkAP * 4)) / 2) + 5) * atkNature);
         
@@ -921,6 +924,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const defNatureVal = document.getElementById('def-nature').value;
         const defNature = getNatureMultiplier(defNatureVal, defStatKey);
         let defReal = Math.floor((Math.floor((defBase * 2 + 31 + (defAP * 4)) / 2) + 5) * defNature);
+        
+        // --- Critical Hit Stat Adjustment ---
+        let effectiveAtkRank = atkRank;
+        let effectiveDefRank = defRank;
+        
+        if (isCrit) {
+            if (effectiveAtkRank < 0) effectiveAtkRank = 0;
+            if (effectiveDefRank > 0) effectiveDefRank = 0;
+        }
+        
         
         const hpBase = defender.stats.hp;
         const hpAP = parseInt(document.getElementById('hp-ap').value) || 0;
@@ -993,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isSuperEffective = typeMod > 1.0;
         
-        let finalAtk = Math.floor(atkReal * getRankMod(atkRank));
+        let finalAtk = Math.floor(atkReal * getRankMod(effectiveAtkRank));
         const atkItemRaw = document.getElementById('atk-item').value;
         const atkItemMod = getItemMod(atkItemRaw, true, isSuperEffective, move.category);
         
@@ -1054,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Defender Items & Weather State Buffs
         const defItemRaw = document.getElementById('def-item').value;
         const defItemMod = getItemMod(defItemRaw, false, isSuperEffective, move.category);
-        let finalDefReal = defReal;
+        let finalDefReal = Math.floor(defReal * getRankMod(effectiveDefRank));
         let damageReductionMod = 1.0;
         
         // Weather Defense buffs
@@ -1121,7 +1134,10 @@ document.addEventListener('DOMContentLoaded', () => {
             abilityDmgMod *= 0.5;
         }
         
-        const baseDamage = Math.floor(Math.floor(Math.floor(2 * lv / 5 + 2) * power * finalAtk / finalDefReal) / 50 + 2);
+        let baseDamage = Math.floor(Math.floor(Math.floor(2 * lv / 5 + 2) * power * finalAtk / finalDefReal) / 50 + 2);
+        if (isCrit) {
+            baseDamage = Math.floor(baseDamage * 1.5);
+        }
         
         // Final modifiers applied sequentially
         // baseDamage * (0.85~1.0) * STAB * TypeMod * WeatherMod * TerrainMod * OtherMods * Ability Mod
@@ -1273,8 +1289,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Listeners for inputs
     const inputs = [
         'move-select', 
-        'atk-ap', 'atk-nature', 'atk-rank', 'atk-item', 'atk-ability',
-        'hp-ap', 'def-ap', 'def-nature', 'def-item', 'def-ability',
+        'atk-ap', 'atk-nature', 'atk-rank', 'atk-crit', 'atk-item', 'atk-ability',
+        'hp-ap', 'def-ap', 'def-nature', 'def-rank', 'def-item', 'def-ability',
         'def-atk-ap', 'def-atk-nature', 'def-atk-rank',
         'field-weather', 'field-terrain', 'def-stealth-rock', 'def-spikes', 'def-status', 'def-other-dmg'
     ];

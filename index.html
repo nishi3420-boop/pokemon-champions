@@ -137,6 +137,10 @@
                             </select>
                         </div>
                     </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0; padding: 0.5rem; background: rgba(255, 89, 89, 0.1); border-radius: 6px; border: 1px solid rgba(255, 89, 89, 0.3);">
+                        <input type="checkbox" id="atk-crit" style="width: 18px; height: 18px; cursor: pointer;">
+                        <label for="atk-crit" style="margin: 0; color: #ff5959; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 4px;">🎯 急所に当てる (1.5x / ランク無視)</label>
+                    </div>
                     <div class="input-group" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
                         <label>特性 (Attacker Ability)</label>
                         <select id="atk-ability" style="padding: 6px; font-size: 0.9rem;">
@@ -206,6 +210,20 @@
                         <div class="input-group">
                             <label>防御ポイント</label>
                             <input type="number" id="def-ap" value="32" min="0" max="32">
+                        </div>
+                        <div class="input-group">
+                            <label>ランク</label>
+                            <select id="def-rank">
+                                <option value="0">±0</option>
+                                <option value="1">+1</option>
+                                <option value="2">+2</option>
+                                <option value="3">+3</option>
+                                <option value="4">+4</option>
+                                <option value="5">+5</option>
+                                <option value="6">+6</option>
+                                <option value="-1">-1</option>
+                                <option value="-2">-2</option>
+                            </select>
                         </div>
                         <div class="input-group">
                             <label>防御性格</label>

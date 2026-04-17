@@ -247,8 +247,25 @@ select option {
 .result-card {
     grid-column: 1 / -1;
     margin-top: 1rem;
-    background: linear-gradient(135deg, rgba(0, 210, 255, 0.1), rgba(157, 80, 187, 0.1));
+    background: linear-gradient(135deg, rgba(0, 210, 255, 0.15), rgba(157, 80, 187, 0.15));
     text-align: center;
+    position: sticky;
+    bottom: 2rem;
+    z-index: 90;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.4);
+    border: 1px solid var(--accent-primary);
+}
+
+@media (max-width: 768px) {
+    .result-card {
+        bottom: 5rem; /* Space for tab bar */
+        margin: 0 -0.5rem;
+        border-radius: 0;
+        padding: 0.8rem;
+    }
+    .result-card h2 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .damage-text { font-size: 1.5rem !important; }
+    .damage-bar-container { margin: 0.5rem 0 !important; }
 }
 
 .damage-bar-container {
