@@ -28,17 +28,23 @@ body {
     font-family: var(--font-family);
     min-height: 100vh;
     overflow-x: hidden;
+    padding-top: 85px; /* Compansate for fixed header */
 }
 
 header {
-    padding: 2rem;
-    text-align: center;
+    background: var(--card-bg);
+    padding: 1rem 1.5rem;
     border-bottom: 1px solid var(--glass-border);
-    background: rgba(13, 15, 20, 0.8);
-    backdrop-filter: blur(10px);
-    position: sticky;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    position: fixed;
     top: 0;
-    z-index: 100;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    box-sizing: border-box;
 }
 
 header h1 {
